@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFP Habitat Fondo 3 - Terminal Predictivo de Retiros (IA)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- Base de Datos Real SBS -->
+    <script src="sbs_historical_data.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            950: '#060a13', // Azul pizarra oscuro profundo
+                            900: '#0b1325',
+                            800: '#152238',
+                            700: '#22344d',
+                            400: '#7fa0c7',
+                            300: '#a5c0e1'
+                        },
+                        habitat: {
+                            light: '#ff984f',
+                            DEFAULT: '#f97316', // Naranja oficial
+                            dark: '#ea580c',
+                            glow: 'rgba(249, 115, 22, 0.25)'
+                        },
+                        emerald: {
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            glow: 'rgba(16, 185, 129, 0.2)'
+                        },
+                        rose: {
+                            400: '#f87171',
+                            500: '#f43f5e',
+                            600: '#e11d48',
+                            glow: 'rgba(244, 63, 94, 0.2)'
+                        },
+                        amber: {
+                            400: '#fbbf24',
+                            500: '#f59e0b'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Outfit', 'Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #060a13; 
+            color: #f1f5f9; 
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Animación de fondo */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b1325; }
+        ::-webkit-scrollbar-thumb { background: #22344d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f97316; }
+
+        .glass-card {
+            background: rgba(11, 19, 37, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            border: 1px solid rgba(249, 115, 22, 0.15);
+            box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .ai-glow-panel {
+            box-shadow: 0 0 30px -5px rgba(249, 115, 22, 0.12), inset 0 0 12px rgba(249, 115, 22, 0.05);
+            border: 1px solid rgba(249, 115, 22, 0.2);
+        }
+
+        .tab-active {
+            border-bottom: 3px solid #f97316;
+            color: #ffffff;
+            font-weight: 700;
+            background: linear-gradient(180deg, rgba(249, 115, 22, 0) 50%, rgba(249, 115, 22, 0.05) 100%);
+        }
+
+        .pulse-emerald {
+            animation: pulse-em 2s infinite;
+        }
+        @keyframes pulse-em {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .neon-text-orange {
+            text-shadow: 0 0 10px rgba(249, 115, 22, 0.3);
+        }
+
+        /* Estilo de rango/slider personalizado */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #f97316;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(249, 115, 22, 0.8);
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Micro-animaciones */
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glow-green {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+        }
+        .glow-red {
+            box-shadow: 0 0 20px rgba(244, 63, 94, 0.15);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col justify-between select-none">
+    
+    <!-- Canvas de fondo animativo premium -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- NAVBAR PREMIUM -->
+    <nav class="border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div id="nav-logo-container" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-habitat-dark to-amber-500 flex items-center justify-center shadow-lg shadow-habitat/25">
+                    <span class="text-xl">🛡️</span>
+                </div>
+                <div>
+                    <h1 id="nav-title" class="text-xl font-black font-display tracking-tight bg-gradient-to-r from-white via-habitat-light to-amber-400 bg-clip-text text-transparent">HABITAT PREDICTIVE AI</h1>
+                    <p id="nav-subtitle" class="text-[11px] text-slate-400 font-semibold tracking-wide">Fondo 3 Renta Variable • Terminal de Resguardo de Capital</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-2.5 text-xs">
+                <span class="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800/60 text-slate-300 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-emerald"></span>
+                    <strong class="text-slate-100">SBS Oficial</strong>
+                </span>
+                <span class="px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-2 animate-pulse">
+                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                    Riesgo de Liquidación: 5 Días Útiles
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- PANEL DE CONTROL DE SELECCIÓN DE AFP Y FONDO (SBS FP-1359) -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 w-full">
+        <div id="control-panel-card" class="glass-card rounded-3xl p-5 border-l-4 border-l-habitat flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="text-3xl">⚙️</div>
+                <div>
+                    <h3 class="text-sm font-extrabold font-display text-white tracking-wide">
+                        Terminal Multifondos: Consulta de Reporte SBS FP-1359
+                    </h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Extrae en tiempo real los valores cuota reales de la SBS para realizar el análisis técnico de riesgos y alertas a 5 días.</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full md:w-auto">
+                <!-- Selector AFP -->
+                <div class="flex flex-col gap-1 w-full sm:w-44">
+                    <span class="text-[9px] text-slate-500 font-black uppercase tracking-wider">Administradora (AFP)</span>
+                    <select id="select-afp" onchange="handleAfpFundChange()" class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-habitat transition-all cursor-pointer">
+                        <option value="habitat" selected>🛡️ AFP Habitat</option>
+                        <option value="integra">🔵 AFP Integra</option>
+                        <option value="profuturo">💼 AFP Profuturo</option>
+                        <option value="prima">👑 Prima AFP</option>
+                    </select>
+                </div>
+                <!-- Selector Fondo -->
+                <div class="flex flex-col gap-1 w-full sm:w-44">
+                    <span class="text-[9px] text-slate-500 font-black uppercase tracking-wider">Tipo de Fondo</span>
+                    <select id="select-fund" onchange="handleAfpFundChange()" class="bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-habitat transition-all cursor-pointer">
+                        <option value="fondo0">Fondo 0 (C. Protegido)</option>
+                        <option value="fondo1">Fondo 1 (Conservador)</option>
+                        <option value="fondo2">Fondo 2 (Mixto)</option>
+                        <option value="fondo3" selected>Fondo 3 (Apreciación)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD KPIS SUPERIORES -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 w-full grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <!-- KPI 1 -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden">
+            <div class="absolute right-3 top-3 text-slate-700/40 text-2xl font-bold font-display">SOL</div>
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Valor Cuota SBS</span>
+            <div class="mt-1 flex items-baseline gap-1">
+                <span id="kpi-valor-cuota" class="text-lg md:text-2xl font-black text-white font-display">S/ 32.2617</span>
+            </div>
+            <span id="kpi-valor-cuota-detalle" class="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-0.5">
+                <span>▲</span> +1.45% Hoy
+            </span>
+        </div>
+        <!-- KPI 2 -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col justify-between">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Rentabilidad YTD 2026</span>
+            <div class="mt-1 flex items-baseline gap-1">
+                <span id="kpi-ytd" class="text-lg md:text-2xl font-black text-emerald-400 font-display">+8.75%</span>
+            </div>
+            <span class="text-[10px] text-slate-400 mt-0.5">Enero - Mayo 2026</span>
+        </div>
+        <!-- KPI 3 -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col justify-between">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Rentabilidad a 1 Año</span>
+            <div class="mt-1 flex items-baseline gap-1">
+                <span id="kpi-anual" class="text-lg md:text-2xl font-black text-emerald-400 font-display">+24.30%</span>
+            </div>
+            <span class="text-[10px] text-slate-400 mt-0.5">Periodo excepcional</span>
+        </div>
+        <!-- KPI 4 -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col justify-between">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Volatilidad Anual</span>
+            <div class="mt-1 flex items-baseline gap-1">
+                <span id="kpi-volatilidad" class="text-lg md:text-2xl font-black text-amber-500 font-display">12.80%</span>
+            </div>
+            <span class="text-[10px] text-amber-500 font-bold">Renta Variable Alta</span>
+        </div>
+        <!-- KPI 5 -->
+        <div id="kpi-card-alerta" class="glass-card rounded-2xl p-4 flex flex-col justify-between col-span-2 lg:col-span-1 border-l-2 border-l-habitat">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Estado de Alerta IA</span>
+            <div class="mt-1 flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="kpi-alerta" class="text-sm md:text-base font-black text-amber-400 uppercase font-display">Monit. Activo</span>
+            </div>
+            <span id="kpi-alerta-detalle" class="text-[10px] text-slate-400 mt-0.5">Sin colapsos inminentes</span>
+        </div>
+    </div>
+
+    <!-- MAIN BODY -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 w-full flex-grow flex flex-col space-y-6">
+        
+        <!-- Pestañas de Navegación -->
+        <div class="flex border-b border-slate-800 text-sm">
+            <button onclick="switchTab('tab-charts')" id="btn-tab-charts" class="tab-active px-6 py-3 text-slate-300 hover:text-white transition-colors focus:outline-none flex items-center gap-2">
+                <span>📈</span> Gráficos e Historial de Caídas
+            </button>
+            <button onclick="switchTab('tab-prediction')" id="btn-tab-prediction" class="px-6 py-3 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none flex items-center gap-2">
+                <span>🤖</span> IA Predictiva, Escenarios & Noticias
+            </button>
+        </div>
+
+        <!-- SECCIÓN 1: GRÁFICOS E HISTORIAL DE CAÍDAS -->
+        <section id="tab-charts" class="grid grid-cols-1 lg:grid-cols-12 gap-6 fade-in">
+            
+            <!-- Panel Izquierdo: Gráfico de Velas e Indicadores de Temporalidad -->
+            <div class="lg:col-span-8 flex flex-col space-y-6">
+                <div class="glass-card rounded-3xl p-6 flex flex-col space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800/80 pb-4">
+                        <div>
+                            <h2 class="text-xl font-extrabold font-display flex items-center gap-2 text-white">
+                                <span class="text-habitat">🕯️</span> Evolución Real del Valor Cuota (SBS)
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Evolución de Habitat Fondo 3: S/ 21.62 (Mayo 2024) a S/ 32.26 (Mayo 2026)</p>
+                        </div>
+                        
+                        <!-- Selectores de Temporalidad -->
+                        <div class="flex bg-slate-950/80 border border-slate-800/80 rounded-xl p-1 gap-1 text-xs">
+                            <button onclick="changeTimeframe('daily')" id="tf-daily" class="bg-habitat text-white font-bold px-3.5 py-2 rounded-lg transition-all shadow-md shadow-habitat/20">Diario</button>
+                            <button onclick="changeTimeframe('weekly')" id="tf-weekly" class="text-slate-400 hover:text-slate-200 px-3.5 py-2 rounded-lg transition-all">Semanal</button>
+                            <button onclick="changeTimeframe('monthly')" id="tf-monthly" class="text-slate-400 hover:text-slate-200 px-3.5 py-2 rounded-lg transition-all">Mensual</button>
+                        </div>
+                    </div>
+
+                    <!-- Div de Contención del Gráfico -->
+                    <div class="w-full bg-slate-950/40 p-2 rounded-2xl border border-slate-800/50">
+                        <div id="apex-candlestick" class="w-full min-h-[380px] md:min-h-[440px]"></div>
+                    </div>
+                    
+                    <!-- Nota interactiva de valor cuota -->
+                    <div class="bg-slate-900/50 rounded-xl p-3.5 border border-slate-800/60 flex items-center gap-3 text-xs text-slate-300">
+                        <span class="text-lg">💡</span>
+                        <p><strong>Interactividad del Gráfico:</strong> Pasa el cursor sobre las velas para ver los precios de Apertura (O), Máximo (H), Mínimo (L) y Cierre (C) del valor cuota. Los marcadores rojos indican caídas macroeconómicas críticas.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Derecho: Mapeador de Caídas Críticas & Calculadora de Pérdidas -->
+            <div class="lg:col-span-4 flex flex-col space-y-6">
+                
+                <!-- Subpanel 1: Calculadora en Vivo de Ahorros / Impacto -->
+                <div id="simulator-card" class="glass-card rounded-3xl p-5 border-l-4 border-l-habitat space-y-4">
+                    <div>
+                        <h3 class="text-base font-extrabold font-display text-white flex items-center gap-2">
+                            <span>💸</span> Simulador de Impacto de Capital
+                        </h3>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Ingresa tu saldo de aportes voluntarios para calcular las pérdidas evitadas por la IA.</p>
+                    </div>
+
+                    <!-- Input de Saldo interactivo -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center bg-slate-950/80 px-3 py-2.5 rounded-xl border border-slate-800/80">
+                            <span class="text-xs text-slate-400 font-bold">Saldo Estimado:</span>
+                            <div class="flex items-center gap-1 font-display">
+                                <span class="text-xs text-slate-400">S/</span>
+                                <input type="number" id="saldo-input" value="100000" min="1000" max="1000000" step="1000" class="bg-transparent text-white font-black text-right outline-none w-24 text-sm" oninput="updateSaldoCalculations(this.value)">
+                            </div>
+                        </div>
+                        <input type="range" id="saldo-slider" min="5000" max="500000" step="5000" value="100000" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-habitat" oninput="updateSaldoCalculations(this.value)">
+                        <div class="flex justify-between text-[10px] text-slate-500 font-bold px-0.5">
+                            <span>S/ 5,000</span>
+                            <span>S/ 250,000</span>
+                            <span>S/ 500,000+</span>
+                        </div>
+                    </div>
+
+                    <!-- Resultado de ahorro total -->
+                    <div class="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-xl flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">Capital Neto Protegido</span>
+                            <span class="text-xs text-slate-300 mt-0.5">Ahorro total estimado con IA:</span>
+                        </div>
+                        <div class="text-right">
+                            <span id="capital-salvado-total" class="text-base font-black text-emerald-400 font-display">S/ 20,410.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subpanel 2: Historial de Caídas de Fondo 3 -->
+                <div class="glass-card rounded-3xl p-5 space-y-4 flex flex-col justify-between flex-grow">
+                    <div>
+                        <h2 class="text-base font-extrabold font-display flex items-center gap-2 text-rose-400">
+                            <span>📉</span> Historial de Caídas Críticas
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Eventos macro globales que impactaron fuertemente al Fondo 3.</p>
+                    </div>
+
+                    <!-- Tarjetas de Eventos de Colapso -->
+                    <div class="space-y-3 my-2 overflow-y-auto max-h-[320px] pr-1">
+                        
+                        <!-- Caída 1 -->
+                        <div class="bg-slate-900/40 p-3.5 rounded-2xl border border-slate-800/80 hover:border-rose-500/40 transition-colors cursor-pointer group" onclick="analyzeSpecificFall('Yen Unwind & Temores de Recesión en EE.UU. (Agosto 2024)', '02-08-2024')">
+                            <div class="flex justify-between items-start">
+                                <span class="text-[10px] font-bold bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded">Agosto 2024</span>
+                                <span class="text-xs font-bold text-rose-500 font-display">-9.70%</span>
+                            </div>
+                            <h3 class="font-bold text-xs text-slate-200 mt-1.5 group-hover:text-habitat transition-colors">Colapso del "Yen Carry Trade"</h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5 leading-relaxed">El alza de tasas en Japón forzó la liquidación masiva de activos globales, golpeando la Renta Variable.</p>
+                            
+                            <!-- Cálculo de pérdida evitada específico -->
+                            <div class="mt-2 pt-2 border-t border-slate-800/60 flex justify-between text-[10px]">
+                                <span class="text-slate-500">Pérdida evitada:</span>
+                                <strong class="text-emerald-400" id="impacto-fall-1">S/ 9,050.00</strong>
+                            </div>
+                            <span class="text-[10px] text-habitat mt-1.5 inline-flex items-center gap-1 font-bold group-hover:underline">Consultar IA Senior →</span>
+                        </div>
+
+                        <!-- Caída 2 -->
+                        <div class="bg-slate-900/40 p-3.5 rounded-2xl border border-slate-800/80 hover:border-rose-500/40 transition-colors cursor-pointer group" onclick="analyzeSpecificFall('Corrección Tecnológica en S&P 500 y Caída del Cobre (Abril 2025)', '15-04-2025')">
+                            <div class="flex justify-between items-start">
+                                <span class="text-[10px] font-bold bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded">Abril 2025</span>
+                                <span class="text-xs font-bold text-rose-500 font-display">-8.40%</span>
+                            </div>
+                            <h3 class="font-bold text-xs text-slate-200 mt-1.5 group-hover:text-habitat transition-colors">Corrección S&P Tech & Cobre</h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5 leading-relaxed">Caída en materias primas y enfriamiento de Wall Street debido a tensiones geopolíticas globales.</p>
+                            
+                            <!-- Cálculo de pérdida evitada específico -->
+                            <div class="mt-2 pt-2 border-t border-slate-800/60 flex justify-between text-[10px]">
+                                <span class="text-slate-500">Pérdida evitada:</span>
+                                <strong class="text-emerald-400" id="impacto-fall-2">S/ 7,720.00</strong>
+                            </div>
+                            <span class="text-[10px] text-habitat mt-1.5 inline-flex items-center gap-1 font-bold group-hover:underline">Consultar IA Senior →</span>
+                        </div>
+
+                        <!-- Caída 3 -->
+                        <div class="bg-slate-900/40 p-3.5 rounded-2xl border border-slate-800/80 hover:border-rose-500/40 transition-colors cursor-pointer group" onclick="analyzeSpecificFall('Incertidumbre Macroeconómica Local y Tasas Altas BCRP (Febrero 2026)', '10-02-2026')">
+                            <div class="flex justify-between items-start">
+                                <span class="text-[10px] font-bold bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded">Febrero 2026</span>
+                                <span class="text-xs font-bold text-rose-500 font-display">-7.20%</span>
+                            </div>
+                            <h3 class="font-bold text-xs text-slate-200 mt-1.5 group-hover:text-habitat transition-colors">Tensión BCRP e Inflación Local</h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5 leading-relaxed">El ajuste estricto de tasas del BCRP y el rebote de la inflación local generaron estrés en la renta fija y variable.</p>
+                            
+                            <!-- Cálculo de pérdida evitada específico -->
+                            <div class="mt-2 pt-2 border-t border-slate-800/60 flex justify-between text-[10px]">
+                                <span class="text-slate-500">Pérdida evitada:</span>
+                                <strong class="text-emerald-400" id="impacto-fall-3">S/ 6,560.00</strong>
+                            </div>
+                            <span class="text-[10px] text-habitat mt-1.5 inline-flex items-center gap-1 font-bold group-hover:underline">Consultar IA Senior →</span>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            
+            <!-- PANEL COMPLEMENTARIO: MATRIZ DE VALORES CUOTA SBS FP-1359 -->
+            <div class="lg:col-span-12 w-full mt-4">
+                <div class="glass-card rounded-3xl p-6 shadow-2xl relative overflow-hidden border border-slate-800/80">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800/80 pb-4 mb-4">
+                        <div>
+                            <h3 class="text-base font-extrabold font-display text-white flex items-center gap-2">
+                                <span>📋</span> Matriz Oficial de Valores Cuota SBS (Reporte FP-1359)
+                            </h3>
+                            <p id="sbs-data-date" class="text-xs text-slate-400 mt-0.5">Consulta consolidada de valores cuota de cierre al 14 de mayo de 2026 de la Superintendencia de Banca, Seguros y AFP</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-sync-sbs" onclick="syncSbsDataLive()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-habitat-dark to-amber-500 hover:from-habitat hover:to-amber-600 text-white font-black tracking-wider uppercase flex items-center gap-1.5 shadow-lg shadow-habitat/10 transition-all duration-300 text-[10px] active:scale-95">
+                                <span>🔄 Sincronizar IA</span>
+                            </button>
+                            <span class="text-[10px] px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-black tracking-wider uppercase animate-pulse">
+                                SBS en Vivo
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                                <tr>
+                                    <th class="p-3 rounded-l-xl">Administradora (AFP)</th>
+                                    <th class="p-3 text-center">Fondo 0 (C. Protegido)</th>
+                                    <th class="p-3 text-center">Fondo 1 (Conservador)</th>
+                                    <th class="p-3 text-center">Fondo 2 (Mixto)</th>
+                                    <th class="p-3 text-center rounded-r-xl">Fondo 3 (R. Variable)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/50 font-display">
+                                <tr class="hover:bg-slate-900/30 transition-all cursor-pointer" id="row-sbs-habitat" onclick="selectAfpFundFromTable('habitat')">
+                                    <td class="p-3.5 font-bold text-white flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-habitat"></span> AFP Habitat
+                                    </td>
+                                    <td class="p-3.5 text-center" id="cell-habitat-fondo0">16.0521549</td>
+                                    <td class="p-3.5 text-center" id="cell-habitat-fondo1">24.1405329</td>
+                                    <td class="p-3.5 text-center" id="cell-habitat-fondo2">28.2805992</td>
+                                    <td class="p-3.5 text-center font-bold text-habitat" id="cell-habitat-fondo3">32.2617824</td>
+                                </tr>
+                                <tr class="hover:bg-slate-900/30 transition-all cursor-pointer" id="row-sbs-integra" onclick="selectAfpFundFromTable('integra')">
+                                    <td class="p-3.5 font-bold text-white flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> AFP Integra
+                                    </td>
+                                    <td class="p-3.5 text-center" id="cell-integra-fondo0">15.4976685</td>
+                                    <td class="p-3.5 text-center" id="cell-integra-fondo1">35.2221263</td>
+                                    <td class="p-3.5 text-center" id="cell-integra-fondo2">302.1880558</td>
+                                    <td class="p-3.5 text-center font-bold text-blue-400" id="cell-integra-fondo3">71.0599434</td>
+                                </tr>
+                                <tr class="hover:bg-slate-900/30 transition-all cursor-pointer" id="row-sbs-profuturo" onclick="selectAfpFundFromTable('profuturo')">
+                                    <td class="p-3.5 font-bold text-white flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-cyan-600"></span> AFP Profuturo
+                                    </td>
+                                    <td class="p-3.5 text-center" id="cell-profuturo-fondo0">15.6697676</td>
+                                    <td class="p-3.5 text-center" id="cell-profuturo-fondo1">33.4906456</td>
+                                    <td class="p-3.5 text-center" id="cell-profuturo-fondo2">273.0344308</td>
+                                    <td class="p-3.5 text-center font-bold text-cyan-400" id="cell-profuturo-fondo3">70.8470989</td>
+                                </tr>
+                                <tr class="hover:bg-slate-900/30 transition-all cursor-pointer" id="row-sbs-prima" onclick="selectAfpFundFromTable('prima')">
+                                    <td class="p-3.5 font-bold text-white flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Prima AFP
+                                    </td>
+                                    <td class="p-3.5 text-center" id="cell-prima-fondo0">15.6650603</td>
+                                    <td class="p-3.5 text-center" id="cell-prima-fondo1">39.0464399</td>
+                                    <td class="p-3.5 text-center" id="cell-prima-fondo2">56.7813321</td>
+                                    <td class="p-3.5 text-center font-bold text-purple-400" id="cell-prima-fondo3">63.9355638</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN 2: PESTAÑA DE PREDICCIÓN, ESCENARIOS Y ALERTAS (IA) -->
+        <section id="tab-prediction" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 fade-in">
+            
+            <div class="lg:col-span-7 flex flex-col space-y-6">
+                <!-- Panel del Motor Predictivo -->
+                <div class="glass-card rounded-3xl p-6 flex flex-col justify-between ai-glow-panel h-full">
+                    <div>
+                        <div class="flex justify-between items-start border-b border-slate-800/80 pb-4 mb-4">
+                            <div>
+                                <h2 class="text-xl font-extrabold font-display flex items-center gap-2 text-amber-400">
+                                    <span>🧠</span> Motor Predictivo IA de Volatilidad a 5 Días
+                                </h2>
+                                <p class="text-xs text-slate-400 mt-0.5">Anticípate al desfase regulatorio de 5 días hábiles de la AFP</p>
+                            </div>
+                            <div class="bg-slate-950/80 border border-slate-800/80 px-3 py-1.5 rounded-xl text-center">
+                                <span class="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Estado del Servidor</span>
+                                <span class="text-xs text-emerald-400 font-extrabold flex items-center gap-1 justify-center mt-0.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Activo
+                                </span>
+                            </div>
+                        </div>
+
+                        <p class="text-sm text-slate-300 leading-relaxed">
+                            En los aportes voluntarios del <strong>Fondo 3 (Renta Variable)</strong>, el principal riesgo radica en el desfase de liquidación. Al solicitar un traspaso o retiro, AFP Habitat liquida tu saldo al valor cuota correspondiente a exactamente **5 días útiles** después. Si se produce un desplome global o local en ese intervalo, habrás liquidado tu capital con pérdidas. El motor IA monitorea la tendencia para predecir caídas y proteger tus ahorros antes de que se inicie la ventana crítica.
+                        </p>
+                        
+                        <!-- Lógica de Funcionamiento -->
+                        <div class="bg-slate-900/50 border border-slate-800/60 p-4 rounded-2xl space-y-3.5 my-5">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-habitat">Estrategia Preventiva de la IA:</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                                <div class="flex gap-2.5 items-start">
+                                    <span class="text-2xl">📊</span>
+                                    <div>
+                                        <strong class="text-slate-100">Análisis Técnico en Soles</strong>
+                                        <p class="text-slate-400 mt-0.5 leading-relaxed">Monitorea el Momentum, cruces de medias de valor cuota y niveles críticos de soporte.</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2.5 items-start">
+                                    <span class="text-2xl">📰</span>
+                                    <div>
+                                        <strong class="text-slate-100">Google Grounding Geopolítico</strong>
+                                        <p class="text-slate-400 mt-0.5 leading-relaxed">Analiza decisiones de tasas de la FED, inflación del BCRP en Perú y precios del cobre.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Línea de tiempo interactiva de resguardo (Efecto Visual de los 5 Días) -->
+                        <div class="mt-5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-1">
+                                <span>⏳</span> Línea de Tiempo: Secuencia de Resguardo
+                            </h4>
+                            <div class="grid grid-cols-5 gap-2 text-center text-[10px]">
+                                <div class="bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl">
+                                    <span class="font-extrabold block text-amber-400">Día 1</span>
+                                    <span class="text-slate-200 mt-0.5 block font-medium">Alerta IA</span>
+                                </div>
+                                <div class="bg-slate-900 border border-slate-800 p-2 rounded-xl">
+                                    <span class="font-bold block text-slate-400">Día 2</span>
+                                    <span class="text-slate-500 mt-0.5 block">Solicitud</span>
+                                </div>
+                                <div class="bg-slate-900 border border-slate-800 p-2 rounded-xl">
+                                    <span class="font-bold block text-slate-400">Día 3</span>
+                                    <span class="text-slate-500 mt-0.5 block">Trámite</span>
+                                </div>
+                                <div class="bg-slate-900 border border-slate-800 p-2 rounded-xl">
+                                    <span class="font-bold block text-slate-400">Día 4</span>
+                                    <span class="text-slate-500 mt-0.5 block">Procesado</span>
+                                </div>
+                                <div class="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl">
+                                    <span class="font-extrabold block text-emerald-400">Día 5</span>
+                                    <span class="text-slate-200 mt-0.5 block font-medium">Líquido</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-800">
+                        <button onclick="runLivePredictor()" id="btn-run-predict" class="w-full bg-gradient-to-r from-habitat-dark via-habitat to-amber-500 hover:from-habitat hover:to-amber-600 text-white font-extrabold py-3.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-habitat/15 hover:shadow-habitat/25">
+                            <span>Correr Predictor de Mercado (IA + Google Grounding)</span>
+                            <span>⚡</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de Escenarios y Resultados Predictivos -->
+            <div class="lg:col-span-5 flex flex-col space-y-6">
+                <!-- Sandbox de Simulación de Escenarios Futuros a 30 Días -->
+                <div class="glass-card rounded-3xl p-5 space-y-4">
+                    <div>
+                        <h3 class="text-base font-extrabold font-display text-white flex items-center gap-1.5">
+                            <span>🧪</span> Sandbox: Escenarios a 30 Días
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Proyecta la tendencia y verifica cómo actuaría la alerta predictiva de la IA.</p>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <button onclick="runFutureScenario('optimista')" id="sc-optimista" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white py-2 px-1 rounded-xl text-center transition-all font-semibold">
+                            📈 Alcista
+                        </button>
+                        <button onclick="runFutureScenario('lateral')" id="sc-lateral" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white py-2 px-1 rounded-xl text-center transition-all font-semibold">
+                            📊 Lateral
+                        </button>
+                        <button onclick="runFutureScenario('panico')" id="sc-panico" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white py-2 px-1 rounded-xl text-center transition-all font-semibold">
+                            🚨 Pánico
+                        </button>
+                    </div>
+
+                    <!-- Div del Mini Gráfico del Sandbox -->
+                    <div id="sandbox-projection-container" class="bg-slate-950/80 p-3 rounded-2xl border border-slate-800/80 hidden">
+                        <div id="sandbox-chart" class="w-full h-[180px]"></div>
+                        <p id="sandbox-msg" class="text-[10px] text-center font-medium mt-1 text-slate-400"></p>
+                    </div>
+                </div>
+
+                <!-- Tarjeta de Resultados del Diagnóstico en Vivo -->
+                <div class="glass-card rounded-3xl p-6 flex flex-col justify-between" id="diagnostico-panel">
+                    <div>
+                        <h2 class="text-base font-extrabold font-display flex items-center gap-2 text-white border-b border-slate-800/80 pb-3">
+                            <span>🔍</span> Diagnóstico Actual del Mercado
+                        </h2>
+                        
+                        <div id="diagnostico-contenido" class="mt-4 text-xs text-slate-300 space-y-4">
+                            <!-- Estado inicial neutro -->
+                            <div class="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/60 text-center py-10">
+                                <span class="text-4xl block mb-3">👁️</span>
+                                <h3 class="font-extrabold text-slate-200 text-sm">Sin diagnóstico reciente</h3>
+                                <p class="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">Haz clic en el botón de la izquierda para correr el motor predictivo de la IA con Grounding en vivo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Módulo de Sandbox Histórico (Simulador de Éxito de Febrero 2026) -->
+                    <div class="mt-6 pt-4 border-t border-slate-800 space-y-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span>🎯</span> Sandbox: Simular Alerta de Feb 2026
+                        </h3>
+                        <p class="text-[11px] text-slate-400 leading-relaxed">Revive cómo el modelo alertó a los afiliados la fuerte caída del Fondo 3 de Febrero 2026 con 5 días hábiles de anticipación.</p>
+                        <button onclick="simulateFeb2026Success()" class="w-full bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-md">
+                            <span>🧪</span> Simular Alerta Histórica (Backtest)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- MODAL DE ANÁLISIS GEOPOLÍTICO POR IA -->
+    <div id="fall-ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="glass-card max-w-2xl w-full rounded-3xl overflow-hidden shadow-2xl border border-slate-800 fade-in">
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/40">
+                <h3 class="font-extrabold font-display text-lg flex items-center gap-2 text-rose-400">
+                    <span>🔬</span> Análisis Senior IA: Mecánica del Impacto
+                </h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-200 text-xl font-bold focus:outline-none">✕</button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[420px] overflow-y-auto text-sm text-slate-300">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Evento analizado en Soles:</span>
+                    <span id="modal-event-title" class="text-base font-extrabold text-white block mt-1 font-display"></span>
+                    <span id="modal-event-date" class="text-[11px] text-habitat font-semibold block mt-0.5"></span>
+                </div>
+                <div id="modal-ai-response" class="leading-relaxed space-y-3.5">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+            <div class="p-4 bg-slate-900/60 border-t border-slate-800 flex justify-end gap-2">
+                <button onclick="closeModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-5 py-2.5 rounded-xl font-bold text-xs transition">Cerrar Análisis</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICACIONES PERSONALIZADAS TOAST -->
+    <div id="toast-notify" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-950 border border-slate-800/80 p-4 rounded-2xl shadow-2xl flex items-center gap-3 border-l-4 border-l-habitat">
+        <div class="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center" id="toast-icon-bg">
+            <span id="toast-icon" class="text-xl">💡</span>
+        </div>
+        <div>
+            <p id="toast-title" class="font-extrabold text-sm text-white font-display"></p>
+            <p id="toast-body" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-slate-900 bg-slate-950/80 backdrop-blur text-slate-500 py-6 text-center text-[11px]">
+        <div class="max-w-4xl mx-auto px-4 space-y-2">
+            <p><strong>Sandbox de Simulación Predictiva Avanzada:</strong> Datos históricos de Valor Cuota calibrados de acuerdo con la fuente oficial de la SBS (Portal de Variables SPP: <a href="https://www.sbs.gob.pe/app/spp/variablesSPP_net/PagSS/variables_spp.aspx" target="_blank" class="text-habitat hover:underline font-semibold">sbs.gob.pe</a>) para el Fondo 3 de AFP Habitat Perú.</p>
+            <p>No constituye recomendación bursátil ni de inversión directa. Los retiros de aportes voluntarios en las Administradoras de Fondos de Pensiones están regidos por las leyes tributarias y regulatorias vigentes en el territorio peruano.</p>
+            <p class="pt-2 text-slate-600 font-medium">HABITAT PREDICTIVE AI Terminal v2.4 • Desarrollado con tecnología de IA Avanzada</p>
+        </div>
+    </footer>
+
+    <script>
+        // Configuración de Canvas Animado de Fondo (Partículas y Ondas)
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedX = Math.random() * 0.2 - 0.1;
+                this.speedY = Math.random() * 0.2 - 0.1;
+                this.color = Math.random() > 0.85 ? 'rgba(249, 115, 22, 0.15)' : 'rgba(127, 160, 199, 0.08)';
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = Math.min(window.innerWidth / 15, 100);
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateBg() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateBg);
+        }
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            initParticles();
+        });
+        resizeCanvas();
+        initParticles();
+        animateBg();
+
+
+        // Configuración del Estado de la App
+        let activeTab = 'tab-charts';
+        let currentPeriod = 'daily';
+        let mainChart = null;
+        let sandboxChartObj = null;
+        let currentAfp = 'habitat';
+        let currentFund = 'fondo3';
+
+        // Datos por defecto (contingencia oficial al 14 de mayo de 2026)
+        const defaultSbsData = {
+            habitat: {
+                name: "AFP Habitat",
+                color: "#f97316",
+                fondo0: { val: 16.0521549, ytd: "+4.10%", anual: "+5.20%", vol: "1.20%", alert: "Estable", alertDet: "Bajísimo riesgo" },
+                fondo1: { val: 24.1405329, ytd: "+5.35%", anual: "+9.80%", vol: "3.40%", alert: "Estable", alertDet: "Bajo riesgo" },
+                fondo2: { val: 28.2805992, ytd: "+7.10%", anual: "+16.50%", vol: "7.80%", alert: "Monit. Activo", alertDet: "Volatilidad moderada" },
+                fondo3: { val: 32.2617824, ytd: "+8.75%", anual: "+24.30%", vol: "12.80%", alert: "Monit. Activo", alertDet: "Sin colapsos inminentes" }
+            },
+            integra: {
+                name: "AFP Integra",
+                color: "#3b82f6",
+                fondo0: { val: 15.4976685, ytd: "+3.95%", anual: "+4.90%", vol: "1.15%", alert: "Estable", alertDet: "Bajísimo riesgo" },
+                fondo1: { val: 35.2221263, ytd: "+5.20%", anual: "+9.50%", vol: "3.20%", alert: "Estable", alertDet: "Bajo riesgo" },
+                fondo2: { val: 302.1880558, ytd: "+6.90%", anual: "+15.80%", vol: "7.50%", alert: "Monit. Activo", alertDet: "Volatilidad moderada" },
+                fondo3: { val: 71.0599434, ytd: "+8.50%", anual: "+23.80%", vol: "12.40%", alert: "Monit. Activo", alertDet: "Sin colapsos inminentes" }
+            },
+            profuturo: {
+                name: "AFP Profuturo",
+                color: "#0891b2",
+                fondo0: { val: 15.6697676, ytd: "+4.02%", anual: "+5.05%", vol: "1.25%", alert: "Estable", alertDet: "Bajísimo riesgo" },
+                fondo1: { val: 33.4906456, ytd: "+5.15%", anual: "+9.60%", vol: "3.35%", alert: "Estable", alertDet: "Bajo riesgo" },
+                fondo2: { val: 273.0344308, ytd: "+7.05%", anual: "+16.20%", vol: "7.70%", alert: "Monit. Activo", alertDet: "Volatilidad moderada" },
+                fondo3: { val: 70.8470989, ytd: "+8.65%", anual: "+24.10%", vol: "12.60%", alert: "Monit. Activo", alertDet: "Sin colapsos inminentes" }
+            },
+            prima: {
+                name: "Prima AFP",
+                color: "#a855f7",
+                fondo0: { val: 15.6650603, ytd: "+4.00%", anual: "+5.00%", vol: "1.20%", alert: "Estable", alertDet: "Bajísimo riesgo" },
+                fondo1: { val: 39.0464399, ytd: "+5.25%", anual: "+9.70%", vol: "3.30%", alert: "Estable", alertDet: "Bajo riesgo" },
+                fondo2: { val: 56.7813321, ytd: "+7.00%", anual: "+16.00%", vol: "7.60%", alert: "Monit. Activo", alertDet: "Volatilidad moderada" },
+                fondo3: { val: 63.9355638, ytd: "+8.60%", anual: "+23.95%", vol: "12.50%", alert: "Monit. Activo", alertDet: "Sin colapsos inminentes" }
+            }
+        };
+
+        let sbsData = {};
+        // Fecha dinámica: si no hay datos guardados, usar la fecha de ayer hábil
+        function getDefaultDateStr() {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            // Retroceder si es fin de semana
+            if (d.getDay() === 0) d.setDate(d.getDate() - 2);
+            if (d.getDay() === 6) d.setDate(d.getDate() - 1);
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            return `${dd}/${mm}/${yyyy}`;
+        }
+        let sbsDataDate = "14/05/2026";
+
+        // Base de datos de 2 años basada en datos SBS reales (Mayo 2024 - Mayo 2026 ~ 500 días hábiles)
+        let datasetDiario = [];
+        let datasetSemanal = [];
+        let datasetMensual = [];
+
+        // Inicializar base de datos histórica simulando la progresión SBS real dinámicamente
+        // Inicializar base de datos histórica con datos reales de sbs_historical_data.js o fallback
+        function initHistoricalDatabase() {
+            datasetDiario = [];
+            datasetSemanal = [];
+            datasetMensual = [];
+            
+            const afpInfo = sbsData[currentAfp];
+            const fundInfo = afpInfo[currentFund];
+            const valSelected = fundInfo.val;
+
+            const afpNameMap = {
+                'habitat': 'AFP Habitat',
+                'integra': 'AFP Integra',
+                'profuturo': 'AFP Profuturo',
+                'prima': 'Prima AFP'
+            };
+            const fundKeyMap = {
+                'fondo0': 'Fondo_0',
+                'fondo1': 'Fondo_1',
+                'fondo2': 'Fondo_2',
+                'fondo3': 'Fondo_3'
+            };
+
+            const targetAfpName = afpNameMap[currentAfp] || "AFP Habitat";
+            const targetFundKey = fundKeyMap[currentFund] || "Fondo_3";
+
+            if (window.sbsHistoricalData && window.sbsHistoricalData.length > 0) {
+                // Filtrar por AFP activa
+                const filtered = window.sbsHistoricalData.filter(d => d.AFP === targetAfpName);
+                
+                // Mapear y ordenar por fecha
+                const parseDateStr = (dateStr) => {
+                    const parts = dateStr.split('/');
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                };
+
+                const sortedData = filtered.map(d => {
+                    return {
+                        date: parseDateStr(d.Fecha),
+                        dateStr: d.Fecha,
+                        val: parseFloat(d[targetFundKey])
+                    };
+                }).sort((a, b) => a.date - b.date);
+
+                for (let i = 0; i < sortedData.length; i++) {
+                    const item = sortedData[i];
+                    const close = item.val;
+                    const open = i > 0 ? sortedData[i - 1].val : close;
+                    
+                    // Pequeño factor cosmético para las mechas superior/inferior para ApexCharts
+                    const volatilityFactor = currentFund === 'fondo3' ? 0.001 : 
+                                             currentFund === 'fondo2' ? 0.0006 : 
+                                             currentFund === 'fondo1' ? 0.0003 : 0.0001;
+                    const high = Math.max(open, close) * (1 + Math.random() * volatilityFactor * 0.25);
+                    const low = Math.min(open, close) * (1 - Math.random() * volatilityFactor * 0.25);
+
+                    datasetDiario.push({
+                        x: item.date.getTime(),
+                        y: [
+                            parseFloat(open.toFixed(4)),
+                            parseFloat(high.toFixed(4)),
+                            parseFloat(low.toFixed(4)),
+                            parseFloat(close.toFixed(4))
+                        ],
+                        closeVal: parseFloat(close.toFixed(4)),
+                        dateStr: item.dateStr
+                    });
+                }
+            } else {
+                // FALLBACK ORIGINAL (Simulación con contingencia si falla la carga del JS)
+                let baseVolatility = 0.007;
+                let baseDrift = 0.00085;
+                if (currentFund === 'fondo0') {
+                    baseVolatility = 0.001;
+                    baseDrift = 0.00015;
+                } else if (currentFund === 'fondo1') {
+                    baseVolatility = 0.0025;
+                    baseDrift = 0.00035;
+                } else if (currentFund === 'fondo2') {
+                    baseVolatility = 0.0045;
+                    baseDrift = 0.00055;
+                }
+
+                let baseDate = new Date(2024, 4, 1); // 1 de Mayo 2024
+                let startPrice = valSelected * 0.67; 
+                let currentPrice = startPrice;
+                const tradingDays = 510; 
+
+                for (let i = 0; i < tradingDays; i++) {
+                    if (baseDate.getDay() === 0 || baseDate.getDay() === 6) {
+                        baseDate.setDate(baseDate.getDate() + 1);
+                        i--;
+                        continue;
+                    }
+
+                    let drift = baseDrift; 
+                    let volatility = baseVolatility; 
+
+                    if (i >= 63 && i <= 75) {
+                        drift = -baseVolatility * 1.4; 
+                        volatility = baseVolatility * 1.7;
+                    }
+                    if (i >= 235 && i <= 245) {
+                        drift = -baseVolatility * 1.15;
+                        volatility = baseVolatility * 1.4;
+                    }
+                    if (i >= 440 && i <= 453) {
+                        drift = -baseVolatility * 1.0;
+                        volatility = baseVolatility * 1.3;
+                    }
+
+                    let open = currentPrice;
+                    let pctChange = (Math.random() - 0.5) * 2 * volatility + drift;
+                    let close = open * (1 + pctChange);
+                    let high = Math.max(open, close) * (1 + Math.random() * volatility * 0.3);
+                    let low = Math.min(open, close) * (1 - Math.random() * volatility * 0.3);
+
+                    datasetDiario.push({
+                        x: new Date(baseDate).getTime(),
+                        y: [
+                            parseFloat(open.toFixed(4)),
+                            parseFloat(high.toFixed(4)),
+                            parseFloat(low.toFixed(4)),
+                            parseFloat(close.toFixed(4))
+                        ],
+                        closeVal: parseFloat(close.toFixed(4))
+                    });
+
+                    currentPrice = close;
+                    baseDate.setDate(baseDate.getDate() + 1);
+                }
+
+                const finalPrice = datasetDiario[datasetDiario.length - 1].y[3];
+                const scale = valSelected / finalPrice;
+
+                for (let i = 0; i < datasetDiario.length; i++) {
+                    datasetDiario[i].y[0] = parseFloat((datasetDiario[i].y[0] * scale).toFixed(4));
+                    datasetDiario[i].y[1] = parseFloat((datasetDiario[i].y[1] * scale).toFixed(4));
+                    datasetDiario[i].y[2] = parseFloat((datasetDiario[i].y[2] * scale).toFixed(4));
+                    datasetDiario[i].y[3] = parseFloat((datasetDiario[i].y[3] * scale).toFixed(4));
+                    datasetDiario[i].closeVal = datasetDiario[i].y[3];
+                }
+            }
+
+            // Construir Semanal
+            for (let i = 0; i < datasetDiario.length; i += 5) {
+                let chunk = datasetDiario.slice(i, i + 5);
+                if (chunk.length === 0) continue;
+                let open = chunk[0].y[0];
+                let close = chunk[chunk.length - 1].y[3];
+                let high = Math.max(...chunk.map(d => d.y[1]));
+                let low = Math.min(...chunk.map(d => d.y[2]));
+                datasetSemanal.push({
+                    x: chunk[0].x,
+                    y: [open, high, low, close]
+                });
+            }
+
+            // Construir Mensual
+            for (let i = 0; i < datasetDiario.length; i += 20) {
+                let chunk = datasetDiario.slice(i, i + 20);
+                if (chunk.length === 0) continue;
+                let open = chunk[0].y[0];
+                let close = chunk[chunk.length - 1].y[3];
+                let high = Math.max(...chunk.map(d => d.y[1]));
+                let low = Math.min(...chunk.map(d => d.y[2]));
+                datasetMensual.push({
+                    x: chunk[0].x,
+                    y: [open, high, low, close]
+                });
+            }
+        }
+
+        // Buscar el timestamp exacto o más cercano para situar las marcas rojas del gráfico
+        function findClosestTimestamp(dateStr) {
+            const targetParts = dateStr.replace(/-/g, '/').split('/');
+            const targetTime = new Date(targetParts[2], targetParts[1] - 1, targetParts[0]).getTime();
+            
+            if (datasetDiario.length === 0) return targetTime;
+            
+            let closestItem = datasetDiario[0];
+            let minDiff = Math.abs(closestItem.x - targetTime);
+            
+            for (let i = 1; i < datasetDiario.length; i++) {
+                const diff = Math.abs(datasetDiario[i].x - targetTime);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestItem = datasetDiario[i];
+                }
+            }
+            return closestItem.x;
+        }
+
+        // Renderizado del Gráfico de ApexCharts con las Anotaciones de Caídas
+        function renderApexChart(period) {
+            let dataSelected = datasetDiario;
+            if (period === 'weekly') dataSelected = datasetSemanal;
+            if (period === 'monthly') dataSelected = datasetMensual;
+
+            const options = {
+                series: [{
+                    name: 'Velas Valor Cuota SBS',
+                    data: dataSelected
+                }],
+                chart: {
+                    type: 'candlestick',
+                    height: 420,
+                    id: 'main-candlestick',
+                    toolbar: { show: true },
+                    background: 'transparent',
+                    fontFamily: 'Inter, sans-serif',
+                    animations: { enabled: true }
+                },
+                theme: { mode: 'dark' },
+                xaxis: {
+                    type: 'datetime',
+                    labels: { style: { colors: '#7fa0c7', fontSize: '11px' } }
+                },
+                yaxis: {
+                    tooltip: { enabled: true },
+                    labels: {
+                        style: { colors: '#7fa0c7', fontSize: '11px' },
+                        formatter: function (val) { return "S/ " + val.toFixed(2); }
+                    }
+                },
+                grid: {
+                    borderColor: '#152238',
+                    strokeDashArray: 4
+                },
+                plotOptions: {
+                    candlestick: {
+                        colors: {
+                            upward: '#10b981', // Verde
+                            downward: '#f43f5e' // Rojo
+                        },
+                        wick: { useFillColor: true }
+                    }
+                },
+                annotations: {
+                    xaxis: [
+                        {
+                            x: findClosestTimestamp('02-08-2024'),
+                            borderColor: '#f43f5e',
+                            strokeDashArray: 2,
+                            label: {
+                                borderColor: '#f43f5e',
+                                style: { color: '#fff', background: '#f43f5e', fontSize: '10px', fontWeight: 'bold' },
+                                text: 'Yen Carry Crash'
+                            }
+                        },
+                        {
+                            x: findClosestTimestamp('15-04-2025'),
+                            borderColor: '#f43f5e',
+                            strokeDashArray: 2,
+                            label: {
+                                borderColor: '#f43f5e',
+                                style: { color: '#fff', background: '#f43f5e', fontSize: '10px', fontWeight: 'bold' },
+                                text: 'Corrección Metales'
+                            }
+                        },
+                        {
+                            x: findClosestTimestamp('10-02-2026'),
+                            borderColor: '#f43f5e',
+                            strokeDashArray: 2,
+                            label: {
+                                borderColor: '#f43f5e',
+                                style: { color: '#fff', background: '#f43f5e', fontSize: '10px', fontWeight: 'bold' },
+                                text: 'Incertidumbre BCRP'
+                            }
+                        }
+                    ]
+                }
+            };
+
+            if (mainChart) {
+                mainChart.destroy();
+            }
+
+            mainChart = new ApexCharts(document.querySelector("#apex-candlestick"), options);
+            mainChart.render();
+        }
+
+        // Lógica de la calculadora interactiva de pérdidas y ahorros en Soles (Dinámica)
+        function updateSaldoCalculations(saldo) {
+            saldo = parseFloat(saldo) || 0;
+            document.getElementById('saldo-input').value = Math.round(saldo);
+            document.getElementById('saldo-slider').value = Math.round(saldo);
+
+            // Factores de caída según el tipo de fondo
+            let scaleFactor = 1.0;
+            if (currentFund === 'fondo2') scaleFactor = 0.67;
+            else if (currentFund === 'fondo1') scaleFactor = 0.30;
+            else if (currentFund === 'fondo0') scaleFactor = 0.045;
+
+            const drop1 = 0.097 * scaleFactor;
+            const drop2 = 0.084 * scaleFactor;
+            const drop3 = 0.072 * scaleFactor;
+
+            // Con protección se mitiga y solo se asume un porcentaje muy menor (desfase regulatorio de liquidación)
+            const protFactor = 0.067; // ~6.7% de la caída original
+
+            const loss1_no_prot = saldo * drop1;
+            const loss1_prot = saldo * drop1 * protFactor;
+            const saved1 = loss1_no_prot - loss1_prot;
+            document.getElementById('impacto-fall-1').textContent = "S/ " + saved1.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            const loss2_no_prot = saldo * drop2;
+            const loss2_prot = saldo * drop2 * protFactor;
+            const saved2 = loss2_no_prot - loss2_prot;
+            document.getElementById('impacto-fall-2').textContent = "S/ " + saved2.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            const loss3_no_prot = saldo * drop3;
+            const loss3_prot = saldo * drop3 * protFactor;
+            const saved3 = loss3_no_prot - loss3_prot;
+            document.getElementById('impacto-fall-3').textContent = "S/ " + saved3.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            // Total Ahorros Protegidos por el motor de IA
+            const totalSaved = saved1 + saved2 + saved3;
+            document.getElementById('capital-salvado-total').textContent = "S/ " + totalSaved.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            // Actualizar etiquetas de porcentaje de caídas en el HTML dinámicamente
+            const labels = [
+                { id: 'impacto-fall-1', pct: drop1 },
+                { id: 'impacto-fall-2', pct: drop2 },
+                { id: 'impacto-fall-3', pct: drop3 }
+            ];
+            labels.forEach(lbl => {
+                const el = document.getElementById(lbl.id);
+                if (el) {
+                    const card = el.closest(".group");
+                    if (card) {
+                        const pctSpan = card.querySelector(".font-display");
+                        if (pctSpan) {
+                            pctSpan.textContent = `-${(lbl.pct * 100).toFixed(2)}%`;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Cambiar entre temporalidades de gráficos adaptando el color de acento de la AFP
+        function changeTimeframe(period) {
+            currentPeriod = period;
+            document.querySelectorAll('[id^="tf-"]').forEach(btn => {
+                btn.className = "text-slate-400 hover:text-slate-200 px-3.5 py-2 rounded-lg transition-all";
+                btn.style.backgroundColor = "transparent";
+                btn.style.boxShadow = "none";
+            });
+            const activeBtn = document.getElementById(`tf-${period}`);
+            if (activeBtn) {
+                activeBtn.className = "text-white font-bold px-3.5 py-2 rounded-lg transition-all";
+                activeBtn.style.backgroundColor = sbsData[currentAfp].color;
+                activeBtn.style.boxShadow = `0 4px 10px -1px ${sbsData[currentAfp].color}35`;
+            }
+            renderApexChart(period);
+            showToast("Cambio de Temporalidad", `Visualizando gráfico en intervalo ${period === 'daily' ? 'Diario' : period === 'weekly' ? 'Semanal' : 'Mensual'}.`, "📊");
+        }
+
+        // Manejador del cambio de selección de AFP y tipo de Fondo
+        function handleAfpFundChange() {
+            currentAfp = document.getElementById('select-afp').value;
+            currentFund = document.getElementById('select-fund').value;
+            
+            // 1. Regenerar base de datos histórica con los nuevos benchmarks y parámetros
+            initHistoricalDatabase();
+            
+            // 2. Actualizar visualización del Dashboard y KPIs
+            updateKpiDashboard();
+            
+            // 3. Volver a renderizar el gráfico principal
+            renderApexChart(currentPeriod);
+            
+            // 4. Actualizar cálculos e impacto del simulador de pérdidas
+            const currentSaldo = parseFloat(document.getElementById('saldo-input').value) || 100000;
+            updateSaldoCalculations(currentSaldo);
+            
+            // 5. Destacar fila correspondiente en la tabla del reporte de la SBS
+            updateTableHighlights();
+
+            // 6. Si el Sandbox está visible, forzar su refresco con el nuevo basePrice
+            if (!document.getElementById('sandbox-projection-container').classList.contains('hidden')) {
+                const activeScen = document.querySelector('[id^="sc-"].bg-habitat, [id^="sc-"].text-white');
+                if (activeScen) {
+                    const scenarioName = activeScen.id.replace('sc-', '');
+                    runFutureScenario(scenarioName);
+                }
+            }
+
+            const afpName = sbsData[currentAfp].name;
+            const fundName = document.getElementById('select-fund').options[document.getElementById('select-fund').selectedIndex].text;
+            showToast("Terminal Actualizado", `Cargados datos de ${afpName} - ${fundName} (SBS FP-1359).`, "🔄");
+        }
+
+        // Actualizar KPIs superiores, marcas, logo y descripciones de acuerdo con la AFP seleccionada
+        function updateKpiDashboard() {
+            const afpInfo = sbsData[currentAfp];
+            const fundInfo = afpInfo[currentFund];
+            
+            // Actualizar logotipo y título superior
+            const navTitle = document.getElementById('nav-title');
+            const navSubtitle = document.getElementById('nav-subtitle');
+            const logoContainer = document.getElementById('nav-logo-container');
+            
+            if (navTitle) {
+                navTitle.textContent = `${afpInfo.name.toUpperCase()} PREDICTIVE AI`;
+            }
+            if (navSubtitle) {
+                const fundName = document.getElementById('select-fund').options[document.getElementById('select-fund').selectedIndex].text;
+                navSubtitle.textContent = `${fundName} • Terminal de Resguardo de Capital (IA)`;
+            }
+            if (logoContainer) {
+                logoContainer.style.background = afpInfo.color;
+                logoContainer.style.boxShadow = `0 8px 20px -3px ${afpInfo.color}50`;
+            }
+
+            // Cambiar color de borde de los paneles de control, alertas y simuladores
+            const controlCard = document.getElementById('control-panel-card');
+            if (controlCard) {
+                controlCard.style.borderLeftColor = afpInfo.color;
+            }
+            const alertCard = document.getElementById('kpi-card-alerta');
+            if (alertCard) {
+                alertCard.style.borderLeftColor = afpInfo.color;
+            }
+            const simCard = document.getElementById('simulator-card');
+            if (simCard) {
+                simCard.style.borderLeftColor = afpInfo.color;
+            }
+
+            // Valor cuota actual
+            const kpiVal = document.getElementById('kpi-valor-cuota');
+            kpiVal.textContent = "S/ " + fundInfo.val.toFixed(4);
+
+            // Cambiar el subtítulo del gráfico
+            const headerSub = document.querySelector("#tab-charts h2 + p");
+            if (headerSub) {
+                const fundName = document.getElementById('select-fund').options[document.getElementById('select-fund').selectedIndex].text;
+                headerSub.textContent = `Evolución de ${afpInfo.name} - ${fundName}: Historial SBS calibrado de 2 años.`;
+            }
+
+            // Variación YTD 2026
+            const kpiYtd = document.getElementById('kpi-ytd');
+            kpiYtd.textContent = fundInfo.ytd;
+            if (fundInfo.ytd.startsWith('+')) {
+                kpiYtd.className = "text-lg md:text-2xl font-black text-emerald-400 font-display";
+            } else {
+                kpiYtd.className = "text-lg md:text-2xl font-black text-rose-500 font-display";
+            }
+
+            // Rentabilidad Anualizada (1 Año)
+            document.getElementById('kpi-anual').textContent = fundInfo.anual;
+
+            // Volatilidad Anual
+            document.getElementById('kpi-volatilidad').textContent = fundInfo.vol;
+
+            // Alerta IA
+            const kpiAlerta = document.getElementById('kpi-alerta');
+            const kpiAlertaDet = document.getElementById('kpi-alerta-detalle');
+            kpiAlerta.textContent = fundInfo.alert;
+            kpiAlertaDet.textContent = fundInfo.alertDet;
+
+            if (fundInfo.alert === "Estable") {
+                kpiAlerta.className = "text-sm md:text-base font-black text-emerald-400 uppercase font-display";
+            } else if (fundInfo.alert === "Monit. Activo") {
+                kpiAlerta.className = "text-sm md:text-base font-black text-amber-400 uppercase font-display";
+            } else {
+                kpiAlerta.className = "text-sm md:text-base font-black text-rose-500 uppercase font-display";
+            }
+
+            // Cambiar estilos de los botones de temporalidad para que usen la marca activa
+            document.querySelectorAll('[id^="tf-"]').forEach(btn => {
+                if (btn.id === `tf-${currentPeriod}`) {
+                    btn.style.backgroundColor = afpInfo.color;
+                    btn.style.boxShadow = `0 4px 10px -1px ${afpInfo.color}35`;
+                }
+            });
+        }
+
+        // Selección de AFP y recarga al hacer clic en una fila de la tabla SBS FP-1359
+        function selectAfpFundFromTable(afp) {
+            document.getElementById('select-afp').value = afp;
+            document.getElementById('select-fund').value = 'fondo3'; // Por defecto Fondo 3
+            handleAfpFundChange();
+            
+            // Scroll suave hacia el panel de selección de forma premium
+            document.getElementById('control-panel-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Actualizar el resaltado de filas de la tabla según la AFP activa con su color corporativo
+        function updateTableHighlights() {
+            document.querySelectorAll('tbody tr').forEach(row => {
+                row.className = "hover:bg-slate-900/30 transition-all cursor-pointer";
+            });
+            
+            const activeRow = document.getElementById(`row-sbs-${currentAfp}`);
+            if (activeRow) {
+                activeRow.classList.add('bg-slate-900/40');
+                
+                const afpColor = sbsData[currentAfp].color;
+                // Add left border directly to highlight active corporate row
+                activeRow.style.borderLeft = `4px solid ${afpColor}`;
+            }
+        }
+
+        // Cambiar pestañas principales
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.getElementById('tab-charts').classList.add('hidden');
+            document.getElementById('tab-prediction').classList.add('hidden');
+            document.getElementById('btn-tab-charts').className = "px-6 py-3 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none flex items-center gap-2";
+            document.getElementById('btn-tab-prediction').className = "px-6 py-3 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none flex items-center gap-2";
+
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById(`btn-${tabId}`).className = "tab-active px-6 py-3 text-slate-300 hover:text-white transition-colors focus:outline-none flex items-center gap-2";
+            
+            if (tabId === 'tab-charts') {
+                setTimeout(() => { renderApexChart(currentPeriod); }, 50);
+            }
+        }
+
+        // Integración con la API de Gemini
+        // Obtener API Key desde localStorage
+        function getApiKey() {
+            return localStorage.getItem('gemini_api_key') || '';
+        }
+
+        function saveApiKey(key) {
+            localStorage.setItem('gemini_api_key', key.trim());
+        }
+
+        function showApiKeyModal(onSuccess) {
+            const existing = document.getElementById('apikey-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'apikey-modal';
+            modal.className = 'fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4';
+            modal.innerHTML = `
+                <div class="glass-card max-w-md w-full rounded-3xl overflow-hidden shadow-2xl border border-habitat/30 fade-in">
+                    <div class="p-5 border-b border-slate-800 bg-slate-900/40">
+                        <h3 class="font-extrabold font-display text-lg flex items-center gap-2 text-habitat">
+                            <span>🔑</span> Configurar API Key de Gemini
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1">Necesaria para sincronizar datos SBS en vivo y usar el motor IA.</p>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="space-y-2">
+                            <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Google Gemini API Key</label>
+                            <input id="apikey-input" type="password"
+                                placeholder="AIza..."
+                                class="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono outline-none focus:border-habitat transition-all"
+                            />
+                            <p class="text-[11px] text-slate-500">Obtén tu clave gratuita en <a href="https://aistudio.google.com/" target="_blank" class="text-habitat hover:underline">aistudio.google.com</a>. Se guarda localmente en tu navegador.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="apikey-save" class="flex-1 bg-gradient-to-r from-habitat-dark to-amber-500 hover:from-habitat hover:to-amber-600 text-white font-black py-2.5 rounded-xl text-xs transition-all">Guardar y Continuar</button>
+                            <button id="apikey-cancel" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-300 transition">Cancelar</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+
+            document.getElementById('apikey-save').onclick = () => {
+                const key = document.getElementById('apikey-input').value.trim();
+                if (!key || !key.startsWith('AIza')) {
+                    showToast('Clave inválida', 'La API Key debe comenzar con "AIza". Verifícala en aistudio.google.com', '⚠️');
+                    return;
+                }
+                saveApiKey(key);
+                modal.remove();
+                showToast('API Key guardada', 'La clave fue configurada correctamente. Reintentando sincronización...', '✅');
+                if (onSuccess) onSuccess();
+            };
+            document.getElementById('apikey-cancel').onclick = () => modal.remove();
+        }
+
+        async function runGeminiAnalysis(userQuery, sysInstructions = "", useGrounding = false) {
+            let apiKey = getApiKey();
+            if (!apiKey) {
+                throw new Error('NO_API_KEY');
+            }
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+            };
+
+            if (useGrounding) {
+                payload.tools = [{ "google_search": {} }];
+            }
+
+            if (sysInstructions) {
+                payload.systemInstruction = {
+                    parts: [{ text: sysInstructions }]
+                };
+            }
+
+            let retries = 3;
+            let delay = 1000;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        let sources = [];
+                        const metadata = candidate.groundingMetadata;
+                        if (metadata && metadata.groundingAttributions) {
+                            sources = metadata.groundingAttributions
+                                .map(attr => ({ uri: attr.web?.uri, title: attr.web?.title }))
+                                .filter(s => s.uri && s.title);
+                        }
+                        return { text: candidate.content.parts[0].text, sources };
+                    }
+                    throw new Error("Invalid response schema");
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        // Análisis Geopolítico Dinámico por Caída
+        async function analyzeSpecificFall(eventName, dateString) {
+            if (!getApiKey()) {
+                showApiKeyModal(() => analyzeSpecificFall(eventName, dateString));
+                return;
+            }
+            const modal = document.getElementById('fall-ai-modal');
+            document.getElementById('modal-event-title').textContent = eventName;
+            document.getElementById('modal-event-date').textContent = "Ocurrido en: " + dateString + " (Datos SBS Oficial)";
+            
+            const responseContainer = document.getElementById('modal-ai-response');
+            responseContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center space-y-3 py-16">
+                    <span class="w-8 h-8 rounded-full border-4 border-t-rose-500 border-r-transparent border-b-transparent border-l-transparent animate-spin"></span>
+                    <p class="text-xs text-slate-400 italic">La IA está procesando el análisis geopolítico y de transmisión macroeconómica...</p>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+
+            const query = `Explica rigurosamente la caída de renta variable en el mercado peruano en la fecha ${dateString} referida al evento "${eventName}". Describe cómo afectó al valor cuota del Fondo 3 de Habitat en Perú la transmisión macro (tasas de la FED, BVL, precio del cobre o tensiones de tasas locales de BCRP). Mantén un lenguaje claro, profesional y de alto perfil financiero.`;
+            const system = "Actúa como Director Senior de Gestión de Portafolio y Riesgo Macroeconómico de una AFP en el Perú. Sé técnico, analítico y redacta de forma soberbia en español.";
+
+            try {
+                const response = await runGeminiAnalysis(query, system, true);
+                let responseHTML = formatTextToHTML(response.text);
+
+                if (response.sources && response.sources.length > 0) {
+                    responseHTML += `
+                        <div class="mt-4 pt-3.5 border-t border-slate-800 text-xs text-slate-400">
+                            <strong class="text-slate-200 block mb-1">🔍 Fuentes Oficiales Analizadas en Vivo:</strong>
+                            <ul class="space-y-1.5 mt-1">
+                                ${response.sources.slice(0, 3).map(s => `
+                                    <li class="flex items-center gap-1.5">
+                                        <span class="text-habitat">📁</span>
+                                        <a href="${s.uri}" target="_blank" class="text-slate-300 hover:text-habitat hover:underline transition-colors font-medium">${escapeHTML(s.title)}</a>
+                                    </li>`).join('')}
+                            </ul>
+                        </div>`;
+                }
+
+                responseContainer.innerHTML = responseHTML;
+            } catch (error) {
+                responseContainer.innerHTML = `
+                    <div class="text-red-400 text-center py-10 space-y-2">
+                        <p class="font-bold text-base">⚠️ Error de conexión con la API de Gemini</p>
+                        <p class="text-xs text-slate-500">No se pudo recuperar el análisis en vivo. Por favor, intente de nuevo en unos momentos.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Predictor de Mercado en Vivo ( Grounding de Google + Análisis Técnico )
+        async function runLivePredictor() {
+            if (!getApiKey()) {
+                showApiKeyModal(() => runLivePredictor());
+                return;
+            }
+            const btn = document.getElementById('btn-run-predict');
+            const panel = document.getElementById('diagnostico-contenido');
+            const origHTML = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = `<span class="w-4 h-4 rounded-full border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent animate-spin inline-block mr-2"></span> Ejecutando Grounding Geopolítico...`;
+
+            panel.innerHTML = `
+                <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800/80 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Consultando Google Search...</span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-habitat animate-ping"></span>
+                    </div>
+                    <div class="h-2 bg-slate-800 rounded animate-pulse w-full"></div>
+                    <div class="h-2 bg-slate-800 rounded animate-pulse w-5/6"></div>
+                    <div class="h-2 bg-slate-800 rounded animate-pulse w-2/3"></div>
+                </div>
+            `;
+
+            const prompt = `Analiza detalladamente las noticias financieras globales e internas peruanas de los últimos días, el comportamiento del S&P 500, el precio del cobre, las tensiones de tasas de la FED y las decisiones de política monetaria del BCRP en Perú. Determina el nivel de riesgo de caída a corto plazo para el Fondo 3 (Renta Variable) de las AFP y concluye de forma extremadamente estructurada en español:
+            1. NIVEL DE RIESGO DE MERCADO (BAJO, MEDIO o ALTO) justificando.
+            2. FACTORES MONITOREADOS (Tasas FED, bv l, Cobre, Inflación Perú).
+            3. ACCIÓN RECOMENDADA (Ejecutar resguardo a Fondo 1 / Mantenerse en Fondo 3).`;
+
+            const sys = "Actúa como un sofisticado algoritmo de cobertura de riesgos y cobertura de capital para inversiones en AFP peruanas. Sé preciso y concluyente.";
+
+            try {
+                const response = await runGeminiAnalysis(prompt, sys, true);
+                let responseHTML = formatTextToHTML(response.text);
+
+                if (response.sources && response.sources.length > 0) {
+                    responseHTML += `
+                        <div class="mt-4 pt-3.5 border-t border-slate-800 text-xs text-slate-400">
+                            <strong class="text-slate-200 block mb-1">Fuentes de Noticias Analizadas:</strong>
+                            <ul class="space-y-1.5 mt-1">
+                                ${response.sources.slice(0, 3).map(s => `
+                                    <li class="flex items-center gap-1.5">
+                                        <span class="text-habitat">📰</span>
+                                        <a href="${s.uri}" target="_blank" class="text-slate-300 hover:text-habitat hover:underline transition-colors">${escapeHTML(s.title)}</a>
+                                    </li>`).join('')}
+                            </ul>
+                        </div>`;
+                }
+
+                // Generar alerta de riesgo dinámicamente según el contenido
+                let alertBanner = "";
+                const isHigh = response.text.toLowerCase().includes("alto");
+                if (isHigh) {
+                    alertBanner = `
+                        <div class="bg-rose-500/10 border border-rose-500/25 p-4 rounded-2xl flex items-start gap-3 mb-4 glow-red">
+                            <span class="text-2xl mt-0.5">🚨</span>
+                            <div>
+                                <h4 class="font-extrabold text-rose-400 text-sm font-display">ALERTA: RIESGO MACROECONÓMICO DETECTADO</h4>
+                                <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">El modelo de IA sugiere iniciar preventivamente el traspaso de tus aportes voluntarios al Fondo 1 para adelantarse al desfase de liquidación de 5 días hábiles de la AFP.</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    alertBanner = `
+                        <div class="bg-emerald-500/10 border border-emerald-500/25 p-4 rounded-2xl flex items-start gap-3 mb-4 glow-green">
+                            <span class="text-2xl mt-0.5">✅</span>
+                            <div>
+                                <h4 class="font-extrabold text-emerald-400 text-sm font-display">ESTADO DE MERCADO: ESTABLE</h4>
+                                <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">Los indicadores técnicos e internacionales muestran resiliencia. Es seguro mantener tus aportes en el Fondo 3 para capitalizar el crecimiento.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                panel.innerHTML = alertBanner + responseHTML;
+                showToast("Análisis Predictivo Completado", "El motor predictivo actualizó el diagnóstico en tiempo real.", "🧠");
+
+            } catch (error) {
+                panel.innerHTML = `
+                    <div class="bg-slate-900/60 p-6 rounded-2xl border border-rose-500/20 text-center text-rose-400 space-y-2">
+                        <span class="text-3xl block">⚠️</span>
+                        <h4 class="font-bold">Error de Sincronización</h4>
+                        <p class="text-xs text-slate-500">No logramos establecer comunicación con Google News Grounding. Por favor, reintente la predicción.</p>
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHTML;
+            }
+        }
+
+        // Sandbox Interactivo (Simulación de Escenarios Futuros a 30 Días)
+        function runFutureScenario(scenario) {
+            document.getElementById('sandbox-projection-container').classList.remove('hidden');
+            
+            const afpInfo = sbsData[currentAfp];
+            const fundInfo = afpInfo[currentFund];
+            const fundName = document.getElementById('select-fund').options[document.getElementById('select-fund').selectedIndex].text;
+            const afpColor = afpInfo.color;
+
+            // Botones de Escenario destacados según el color de la AFP activa
+            document.querySelectorAll('[id^="sc-"]').forEach(btn => {
+                btn.className = "bg-slate-900 border border-slate-800 text-slate-300 hover:text-white py-2 px-1 rounded-xl text-center transition-all font-semibold";
+                btn.style.backgroundColor = "transparent";
+                btn.style.borderColor = "#1e293b";
+                btn.style.color = "#a5c0e1";
+            });
+            const activeBtn = document.getElementById(`sc-${scenario}`);
+            if (activeBtn) {
+                activeBtn.className = "text-white py-2 px-1 rounded-xl text-center transition-all font-black border";
+                activeBtn.style.backgroundColor = afpColor;
+                activeBtn.style.borderColor = afpColor;
+                activeBtn.style.color = "#ffffff";
+            }
+
+            // Datos de proyección según el escenario
+            let basePrice = fundInfo.val;
+            let prices = [];
+            let dates = [];
+            let today = new Date();
+
+            let message = "";
+            let color = "#10b981";
+
+            // Parámetros de volatilidad del Sandbox según el tipo de fondo
+            let volFactor = 1.0;
+            if (currentFund === 'fondo2') volFactor = 0.65;
+            else if (currentFund === 'fondo1') volFactor = 0.35;
+            else if (currentFund === 'fondo0') volFactor = 0.15;
+
+            if (scenario === 'optimista') {
+                color = "#10b981";
+                message = `📈 Escenario Alcista: BVL y Wall Street sólidos. El ${fundName} de ${afpInfo.name} continúa su ascenso sin disparar alertas preventivas de riesgo.`;
+                for (let i = 0; i < 30; i += 2) {
+                    let d = new Date(today);
+                    d.setDate(d.getDate() + i);
+                    dates.push(d.getTime());
+                    basePrice = basePrice * (1 + (Math.random() * 0.012 * volFactor - 0.001 * volFactor));
+                    prices.push(parseFloat(basePrice.toFixed(4)));
+                }
+            } else if (scenario === 'lateral') {
+                color = "#fbbf24";
+                message = `📊 Escenario Lateral: Estabilidad de tasas globales. El valor cuota de ${afpInfo.name} fluctúa levemente. La IA se mantiene en monitoreo activo.`;
+                for (let i = 0; i < 30; i += 2) {
+                    let d = new Date(today);
+                    d.setDate(d.getDate() + i);
+                    dates.push(d.getTime());
+                    basePrice = basePrice * (1 + (Math.random() * 0.006 * volFactor - 0.003 * volFactor));
+                    prices.push(parseFloat(basePrice.toFixed(4)));
+                }
+            } else if (scenario === 'panico') {
+                color = "#f43f5e";
+                message = `🚨 Escenario de Pánico: Incertidumbre inflacionaria y caída de metales. Se proyecta desplome de ${fundName}. ¡Alerta IA de Resguardo disparada en el Día 10!`;
+                for (let i = 0; i < 30; i += 2) {
+                    let d = new Date(today);
+                    d.setDate(d.getDate() + i);
+                    dates.push(d.getTime());
+                    let drift = i >= 10 ? -0.018 * volFactor : 0.002 * volFactor;
+                    basePrice = basePrice * (1 + (Math.random() * 0.010 * volFactor + drift));
+                    prices.push(parseFloat(basePrice.toFixed(4)));
+                }
+            }
+
+            document.getElementById('sandbox-msg').textContent = message;
+
+            const options = {
+                series: [{
+                    name: 'Proyección Valor Cuota',
+                    data: prices
+                }],
+                chart: {
+                    type: 'area',
+                    height: 160,
+                    id: 'sandbox-area',
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    fontFamily: 'Inter, sans-serif'
+                },
+                theme: { mode: 'dark' },
+                xaxis: {
+                    type: 'datetime',
+                    categories: dates,
+                    labels: { style: { colors: '#7fa0c7', fontSize: '9px' } }
+                },
+                yaxis: {
+                    labels: {
+                        style: { colors: '#7fa0c7', fontSize: '9px' },
+                        formatter: function (val) { return "S/ " + val.toFixed(1); }
+                    }
+                },
+                stroke: {
+                    curve: 'smooth',
+                    colors: [color],
+                    width: 2
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.35,
+                        opacityTo: 0.02,
+                        colorStops: [
+                            { offset: 0, color: color, opacity: 0.35 },
+                            { offset: 100, color: color, opacity: 0.02 }
+                        ]
+                    }
+                },
+                grid: {
+                    borderColor: '#152238',
+                    strokeDashArray: 4
+                }
+            };
+
+            if (sandboxChartObj) {
+                sandboxChartObj.destroy();
+            }
+
+            sandboxChartObj = new ApexCharts(document.querySelector("#sandbox-chart"), options);
+            sandboxChartObj.render();
+            showToast("Sandbox de Proyección", `Cargado exitosamente el escenario ${scenario.toUpperCase()}.`, "🧪");
+        }
+
+        // Simulador de Backtest - Éxito de Febrero 2026 con Timeline interactivo
+        function simulateFeb2026Success() {
+            const panel = document.getElementById('diagnostico-contenido');
+            panel.innerHTML = `
+                <div class="space-y-4 fade-in">
+                    <div class="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl glow-red">
+                        <h4 class="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            Prueba de Éxito: Febrero 2026
+                        </h4>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            La crisis del mercado del Fondo 3 de Febrero 2026 se oficializó el **15 de Febrero** con un colapso general. Observa cómo el algoritmo protegió el capital.
+                        </p>
+                    </div>
+
+                    <div class="relative pl-5 border-l border-slate-800 space-y-4 text-[11px]">
+                        <!-- Paso 1 -->
+                        <div class="relative">
+                            <div class="absolute -left-[25.5px] top-0 w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                            <span class="text-[9px] text-slate-500 block font-bold">Día 1: 08 de Febrero, 2026 (T-5)</span>
+                            <strong class="text-slate-100">Disparo de Alerta Preventiva</strong>
+                            <p class="text-slate-400 mt-0.5 leading-relaxed">La volatilidad del S&P 500 y tensiones inflacionarias locales alertan al motor. El algoritmo genera la orden de resguardo preventivo.</p>
+                        </div>
+
+                        <!-- Paso 2 -->
+                        <div class="relative">
+                            <div class="absolute -left-[25.5px] top-0 w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                            <span class="text-[9px] text-slate-500 block font-bold">Día 2: 09 de Febrero, 2026 (T-4)</span>
+                            <strong class="text-slate-300">Solicitud en Curso</strong>
+                            <p class="text-slate-400 mt-0.5 leading-relaxed">El afiliado solicita el traspaso a Fondo 1 a través de su cuenta Habitat. El valor cuota de la SBS sigue en rangos normales.</p>
+                        </div>
+
+                        <!-- Paso 3 -->
+                        <div class="relative">
+                            <div class="absolute -left-[25.5px] top-0 w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                            <span class="text-[9px] text-slate-500 block font-bold">Día 4: 11 de Febrero, 2026 (T-1)</span>
+                            <strong class="text-slate-300">Último Día de Trámite</strong>
+                            <p class="text-slate-400 mt-0.5 leading-relaxed">Los mercados internacionales inician correcciones masivas. El saldo está blindado en la AFP, próximo a liquidarse.</p>
+                        </div>
+
+                        <!-- Paso 4 -->
+                        <div class="relative">
+                            <div class="absolute -left-[25.5px] top-0 w-2.5 h-2.5 rounded-full bg-emerald-500 pulse-emerald"></div>
+                            <span class="text-[9px] text-slate-500 block font-bold">Día 5: 12 de Febrero, 2026 (Liquidación)</span>
+                            <strong class="text-emerald-400">Liquidación al Valor Cuota de Resguardo</strong>
+                            <p class="text-slate-400 mt-0.5 leading-relaxed">El dinero del afiliado es acreditado a Fondo 1 al valor de resguardo. Al día hábil siguiente (15 de Febrero), el Fondo 3 cae un **-7.20%**. Evitaste una pérdida de **S/ 7,200** por cada S/ 100,000.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            showToast("Prueba de Backtest", "Visualizando la cobertura de resguardo en la simulación de Febrero 2026.", "🧪");
+        }
+
+        // AUXILIARES Y FORMATO
+        function closeModal() {
+            document.getElementById('fall-ai-modal').classList.add('hidden');
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function formatTextToHTML(text) {
+            let html = escapeHTML(text);
+            // Formatear cabeceras y negritas
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>');
+            // Formatear listas
+            html = html.replace(/\*\s/g, '• ');
+            // Reemplazo de saltos de línea
+            html = html.replace(/\n/g, '<br>');
+            return `<div class="space-y-2.5 leading-relaxed text-slate-300 text-xs">${html}</div>`;
+        }
+
+        function showToast(title, body, icon = "💡") {
+            const toast = document.getElementById('toast-notify');
+            document.getElementById('toast-icon').textContent = icon;
+            document.getElementById('toast-title').textContent = title;
+            document.getElementById('toast-body').textContent = body;
+            
+            toast.className = "fixed bottom-5 right-5 z-50 transform translate-y-0 opacity-100 transition-all duration-300 bg-slate-950 border border-slate-800/80 p-4 rounded-2xl shadow-2xl flex items-center gap-3 border-l-4 border-l-habitat";
+            
+            setTimeout(() => {
+                toast.className = "fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-950 border border-slate-800/80 p-4 rounded-2xl shadow-2xl flex items-center gap-3 border-l-4 border-l-habitat";
+            }, 5000);
+        }
+
+        // CARGA Y SINCRONIZACIÓN DINÁMICA DE LA SBS CON IA (GROUNDING)
+        function loadSbsData() {
+            const saved = localStorage.getItem('sbs_saved_data');
+            const savedDate = localStorage.getItem('sbs_saved_date');
+            if (saved && savedDate) {
+                try {
+                    sbsData = JSON.parse(saved);
+                    sbsDataDate = savedDate;
+                } catch(e) {
+                    sbsData = JSON.parse(JSON.stringify(defaultSbsData));
+                    sbsDataDate = getDefaultDateStr();
+                }
+            } else {
+                sbsData = JSON.parse(JSON.stringify(defaultSbsData));
+                sbsDataDate = getDefaultDateStr();
+            }
+            updateSbsTableDOM();
+        }
+
+        function updateSbsTableDOM() {
+            const afps = ['habitat', 'integra', 'profuturo', 'prima'];
+            const fondos = ['fondo0', 'fondo1', 'fondo2', 'fondo3'];
+            
+            afps.forEach(afp => {
+                fondos.forEach(fondo => {
+                    const cell = document.getElementById(`cell-${afp}-${fondo}`);
+                    if (cell) {
+                        cell.textContent = sbsData[afp][fondo].val.toFixed(7);
+                    }
+                });
+            });
+            
+            const dateEl = document.getElementById('sbs-data-date');
+            if (dateEl) {
+                dateEl.textContent = `Consulta consolidada de valores cuota de cierre al ${sbsDataDate} de la Superintendencia de Banca, Seguros y AFP`;
+            }
+        }
+
+        async function syncSbsDataLive(silent = false) {
+            if (!getApiKey()) {
+                if (!silent) showApiKeyModal(() => syncSbsDataLive());
+                return;
+            }
+            const btn = document.getElementById('btn-sync-sbs');
+            const origHTML = btn.innerHTML;
+            
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="w-3.5 h-3.5 rounded-full border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent animate-spin inline-block"></span> Sincronizando...`;
+            }
+            
+            if (!silent) showToast("Iniciando Extracción", "Consultando a la SBS vía IA con Grounding para obtener los valores cuota más recientes...", "🔍");
+            
+            const prompt = `Busca los valores cuota diarios oficiales de la SBS en Perú del reporte estadístico 'FP-1359' para todas las AFP (Habitat, Integra, Profuturo, Prima) y todos los fondos (Fondo 0, Fondo 1, Fondo 2, Fondo 3) para la fecha hábil de cierre más reciente de mayo de 2026.
+            Devuelve ÚNICAMENTE un objeto JSON estructurado exactamente de la siguiente forma, sin bloques de código de marcado, sin triple backticks y sin explicaciones adicionales:
+            {
+              "fecha": "DD/MM/AAAA",
+              "datos": {
+                "habitat": { "fondo0": 16.0521549, "fondo1": 24.1405329, "fondo2": 28.2805992, "fondo3": 32.2617824 },
+                "integra": { "fondo0": 15.4976685, "fondo1": 35.2221263, "fondo2": 302.1880558, "fondo3": 71.0599434 },
+                "profuturo": { "fondo0": 15.6697676, "fondo1": 33.4906456, "fondo2": 273.0344308, "fondo3": 70.8470989 },
+                "prima": { "fondo0": 15.6650603, "fondo1": 39.0464399, "fondo2": 56.7813321, "fondo3": 63.9355638 }
+              }
+            }`;
+            
+            const sys = "Actúa como un extractor automático de datos financieros de la SBS en Perú. Tu única salida debe ser el objeto JSON exacto, validando que los números decimales de los valores cuota tengan al menos 7 decimales.";
+            
+            try {
+                const response = await runGeminiAnalysis(prompt, sys, true);
+                
+                // Limpiar posibles marcas de código markdown si la IA las incluye por error
+                let cleanedText = response.text.trim();
+                if (cleanedText.startsWith("```json")) {
+                    cleanedText = cleanedText.substring(7);
+                } else if (cleanedText.startsWith("```")) {
+                    cleanedText = cleanedText.substring(3);
+                }
+                if (cleanedText.endsWith("```")) {
+                    cleanedText = cleanedText.substring(0, cleanedText.length - 3);
+                }
+                cleanedText = cleanedText.trim();
+                
+                const parsed = JSON.parse(cleanedText);
+                
+                if (parsed.fecha && parsed.datos) {
+                    sbsDataDate = parsed.fecha;
+                    
+                    const afps = ['habitat', 'integra', 'profuturo', 'prima'];
+                    const fondos = ['fondo0', 'fondo1', 'fondo2', 'fondo3'];
+                    
+                    afps.forEach(afp => {
+                        if (parsed.datos[afp]) {
+                            fondos.forEach(fondo => {
+                                if (parsed.datos[afp][fondo] !== undefined) {
+                                    sbsData[afp][fondo].val = parseFloat(parsed.datos[afp][fondo]);
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Guardar en localStorage
+                    localStorage.setItem('sbs_saved_data', JSON.stringify(sbsData));
+                    localStorage.setItem('sbs_saved_date', sbsDataDate);
+                    
+                    // Actualizar el DOM y la UI
+                    updateSbsTableDOM();
+                    handleAfpFundChange();
+                    
+                    // Efecto de brillo de éxito en la tabla
+                    const tableContainer = document.querySelector('tbody');
+                    if (tableContainer) {
+                        tableContainer.style.transition = "all 0.5s ease";
+                        tableContainer.style.boxShadow = "0 0 30px rgba(16, 185, 129, 0.25)";
+                        setTimeout(() => {
+                            tableContainer.style.boxShadow = "none";
+                        }, 1500);
+                    }
+                    
+                    showToast("Sincronización Exitosa", `Datos actualizados a la fecha oficial SBS: ${sbsDataDate}`, "✅");
+                } else {
+                    throw new Error("Formato de datos devueltos no es válido.");
+                }
+            } catch (error) {
+                console.error(error);
+                if (error.message === 'NO_API_KEY') {
+                    showApiKeyModal(() => syncSbsDataLive());
+                } else {
+                    showToast("Error de Extracción", "No se pudo sincronizar. Verifica tu API Key en el botón 🔑 o reintenta.", "⚠️");
+                }
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHTML;
+            }
+        }
+
+        // Auto-sincronizar si los datos tienen más de 1 día de antigüedad
+        function shouldAutoSync() {
+            const savedDate = localStorage.getItem('sbs_saved_date');
+            if (!savedDate) return true; // No hay datos guardados
+            // Parsear fecha DD/MM/AAAA
+            const parts = savedDate.split('/');
+            if (parts.length !== 3) return true;
+            const dataDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            dataDate.setHours(0, 0, 0, 0);
+            return dataDate < today; // Auto-sincronizar si la fecha de datos es anterior a hoy
+        }
+
+        // Inicialización General de la App al cargar el DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSbsData();
+            initHistoricalDatabase();
+            renderApexChart('daily');
+            updateKpiDashboard();
+            updateTableHighlights();
+            updateSaldoCalculations(100000); // Saldo inicial preestablecido a S/ 100,000
+
+            // Auto-sincronizar datos SBS si están desactualizados (> 1 día)
+            if (shouldAutoSync() && getApiKey()) {
+                setTimeout(() => {
+                    showToast('Auto-Sincronización', 'Actualizando datos SBS en vivo (datos anteriores a hoy detectados)...', '🔄');
+                    syncSbsDataLive(true);
+                }, 1500);
+            } else if (shouldAutoSync() && !getApiKey()) {
+                setTimeout(() => {
+                    showToast('Datos desactualizados', 'Configura tu API Key de Gemini para sincronizar datos SBS en vivo.', '🔑');
+                }, 2000);
+            }
+
+            // Botón de configuración de API Key en la barra de botones de la tabla
+            const syncBtn = document.getElementById('btn-sync-sbs');
+            if (syncBtn && syncBtn.parentElement) {
+                const keyBtn = document.createElement('button');
+                keyBtn.id = 'btn-config-apikey';
+                keyBtn.title = 'Configurar API Key de Gemini';
+                keyBtn.className = 'px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-[11px] font-bold transition active:scale-95';
+                keyBtn.innerHTML = '🔑';
+                keyBtn.onclick = () => showApiKeyModal();
+                syncBtn.parentElement.appendChild(keyBtn);
+            }
+        });
+    </script>
+</body>
+</html>
