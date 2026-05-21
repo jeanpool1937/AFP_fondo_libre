@@ -1339,14 +1339,14 @@
             }
         }
 
-        // Integración con la API de Gemini
+        // Integración con la API de Groq
         // Obtener API Key desde localStorage
         function getApiKey() {
-            return localStorage.getItem('gemini_api_key') || '';
+            return localStorage.getItem('groq_api_key') || '';
         }
 
         function saveApiKey(key) {
-            localStorage.setItem('gemini_api_key', key.trim());
+            localStorage.setItem('groq_api_key', key.trim());
         }
 
         function showApiKeyModal(onSuccess) {
@@ -1360,18 +1360,18 @@
                 <div class="glass-card max-w-md w-full rounded-3xl overflow-hidden shadow-2xl border border-habitat/30 fade-in">
                     <div class="p-5 border-b border-slate-800 bg-slate-900/40">
                         <h3 class="font-extrabold font-display text-lg flex items-center gap-2 text-habitat">
-                            <span>🔑</span> Configurar API Key de Gemini
+                            <span>🔑</span> Configurar API Key de Groq
                         </h3>
-                        <p class="text-xs text-slate-400 mt-1">Necesaria para sincronizar datos SBS en vivo y usar el motor IA.</p>
+                        <p class="text-xs text-slate-400 mt-1">Necesaria para sincronizar datos SBS en vivo y usar el motor IA (Groq).</p>
                     </div>
                     <div class="p-6 space-y-4">
                         <div class="space-y-2">
-                            <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Google Gemini API Key</label>
+                            <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Groq API Key</label>
                             <input id="apikey-input" type="password"
-                                placeholder="AIza..."
+                                placeholder="gsk_..."
                                 class="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono outline-none focus:border-habitat transition-all"
                             />
-                            <p class="text-[11px] text-slate-500">Obtén tu clave gratuita en <a href="https://aistudio.google.com/" target="_blank" class="text-habitat hover:underline">aistudio.google.com</a>. Se guarda localmente en tu navegador.</p>
+                            <p class="text-[11px] text-slate-500">Obtén tu clave gratuita en <a href="https://console.groq.com/" target="_blank" class="text-habitat hover:underline">console.groq.com</a>. Se guarda localmente en tu navegador.</p>
                         </div>
                         <div class="flex gap-2">
                             <button id="apikey-save" class="flex-1 bg-gradient-to-r from-habitat-dark to-amber-500 hover:from-habitat hover:to-amber-600 text-white font-black py-2.5 rounded-xl text-xs transition-all">Guardar y Continuar</button>
@@ -1383,8 +1383,8 @@
 
             document.getElementById('apikey-save').onclick = () => {
                 const key = document.getElementById('apikey-input').value.trim();
-                if (!key || !key.startsWith('AIza')) {
-                    showToast('Clave inválida', 'La API Key debe comenzar con "AIza". Verifícala en aistudio.google.com', '⚠️');
+                if (!key || !key.startsWith('gsk_')) {
+                    showToast('Clave inválida', 'La API Key de Groq debe comenzar con "gsk_". Verifícala en console.groq.com', '⚠️');
                     return;
                 }
                 saveApiKey(key);
@@ -1397,24 +1397,17 @@
 
         async function runGeminiAnalysis(userQuery, sysInstructions = "", useGrounding = false) {
             let apiKey = getApiKey();
-            if (!apiKey) {
-                throw new Error('NO_API_KEY');
-            }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            if (!apiKey) throw new Error('NO_API_KEY');
 
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-            };
+            const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+            const messages = [];
+            if (sysInstructions) messages.push({ role: 'system', content: sysInstructions });
+            messages.push({ role: 'user', content: userQuery });
 
-            if (useGrounding) {
-                payload.tools = [{ "google_search": {} }];
-            }
+            // compound-beta-mini tiene búsqueda web incorporada; para análisis sin búsqueda usamos llama-3.3
+            const model = useGrounding ? 'compound-beta-mini' : 'llama-3.3-70b-versatile';
 
-            if (sysInstructions) {
-                payload.systemInstruction = {
-                    parts: [{ text: sysInstructions }]
-                };
-            }
+            const payload = { model, messages, temperature: 0.1 };
 
             let retries = 3;
             let delay = 1000;
@@ -1422,23 +1415,20 @@
                 try {
                     const response = await fetch(apiUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
                         body: JSON.stringify(payload)
                     });
-                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-                    const result = await response.json();
-                    const candidate = result.candidates?.[0];
-                    if (candidate && candidate.content?.parts?.[0]?.text) {
-                        let sources = [];
-                        const metadata = candidate.groundingMetadata;
-                        if (metadata && metadata.groundingAttributions) {
-                            sources = metadata.groundingAttributions
-                                .map(attr => ({ uri: attr.web?.uri, title: attr.web?.title }))
-                                .filter(s => s.uri && s.title);
-                        }
-                        return { text: candidate.content.parts[0].text, sources };
+                    if (!response.ok) {
+                        const errBody = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errBody.substring(0, 200)}`);
                     }
-                    throw new Error("Invalid response schema");
+                    const result = await response.json();
+                    const text = result.choices?.[0]?.message?.content;
+                    if (text) return { text, sources: [] };
+                    throw new Error('Respuesta vacía de Groq');
                 } catch (error) {
                     if (i === retries - 1) throw error;
                     await new Promise(r => setTimeout(r, delay));
@@ -1491,7 +1481,7 @@
             } catch (error) {
                 responseContainer.innerHTML = `
                     <div class="text-red-400 text-center py-10 space-y-2">
-                        <p class="font-bold text-base">⚠️ Error de conexión con la API de Gemini</p>
+                        <p class="font-bold text-base">⚠️ Error de conexión con la API de Groq</p>
                         <p class="text-xs text-slate-500">No se pudo recuperar el análisis en vivo. Por favor, intente de nuevo en unos momentos.</p>
                     </div>
                 `;
@@ -1811,6 +1801,42 @@
 
         // CARGA Y SINCRONIZACIÓN DINÁMICA DE LA SBS CON IA (GROUNDING)
         function loadSbsData() {
+            // 1. Intentar cargar desde el histórico local (window.sbsHistoricalData) que es la base de datos principal
+            const lastHistDate = getLastHistoricalDate();
+            if (lastHistDate && window.sbsHistoricalData && window.sbsHistoricalData.length > 0) {
+                try {
+                    const lastDateStr = formatDateDDMMYYYY(lastHistDate);
+                    // Buscar los registros del último día
+                    const lastDayRecords = window.sbsHistoricalData.filter(d => d.Fecha === lastDateStr);
+                    if (lastDayRecords.length >= 4) {
+                        const loadedData = JSON.parse(JSON.stringify(defaultSbsData));
+                        const afpKeyMap = {
+                            'AFP Habitat': 'habitat', 'AFP Integra': 'integra',
+                            'AFP Profuturo': 'profuturo', 'Prima AFP': 'prima'
+                        };
+                        
+                        lastDayRecords.forEach(rec => {
+                            const afpKey = afpKeyMap[rec.AFP];
+                            if (afpKey) {
+                                loadedData[afpKey].fondo0.val = parseFloat(rec.Fondo_0);
+                                loadedData[afpKey].fondo1.val = parseFloat(rec.Fondo_1);
+                                loadedData[afpKey].fondo2.val = parseFloat(rec.Fondo_2);
+                                loadedData[afpKey].fondo3.val = parseFloat(rec.Fondo_3);
+                            }
+                        });
+                        
+                        sbsData = loadedData;
+                        sbsDataDate = lastDateStr;
+                        updateSbsTableDOM();
+                        console.log(`[OK] Datos de la app inicializados desde el histórico local al ${lastDateStr}`);
+                        return;
+                    }
+                } catch(e) {
+                    console.error("Error al cargar datos desde histórico local:", e);
+                }
+            }
+
+            // 2. Si falla, usar localStorage o fallback original
             const saved = localStorage.getItem('sbs_saved_data');
             const savedDate = localStorage.getItem('sbs_saved_date');
             if (saved && savedDate) {
@@ -1885,24 +1911,11 @@
             const lastHistDateStr = lastHistDate ? formatDateDDMMYYYY(lastHistDate) : '14/05/2026';
             const todayStr = formatDateDDMMYYYY(new Date());
 
-            const prompt = `Busca los valores cuota diarios oficiales publicados por la SBS de las AFP en el Perú del reporte estadístico 'FP-1359' para todas las AFP (Habitat, Integra, Profuturo, Prima) y todos los tipos de fondo (Fondo 0, 1, 2, 3) para todos los días hábiles estrictamente POSTERIORES a la fecha ${lastHistDateStr} y hasta el día de hoy ${todayStr}.
-            Devuelve ÚNICAMENTE un objeto JSON estructurado exactamente de la siguiente forma, sin bloques de código de marcado, sin triple backticks y sin explicaciones adicionales:
-            {
-              "nuevos_dias": [
-                {
-                  "fecha": "DD/MM/AAAA",
-                  "datos": {
-                    "habitat": { "fondo0": 16.0521549, "fondo1": 24.1405329, "fondo2": 28.2805992, "fondo3": 32.2617824 },
-                    "integra": { "fondo0": 15.4976685, "fondo1": 35.2221263, "fondo2": 302.1880558, "fondo3": 71.0599434 },
-                    "profuturo": { "fondo0": 15.6697676, "fondo1": 33.4906456, "fondo2": 273.0344308, "fondo3": 70.8470989 },
-                    "prima": { "fondo0": 15.6650603, "fondo1": 39.0464399, "fondo2": 56.7813321, "fondo3": 63.9355638 }
-                  }
-                }
-              ]
-            }
-            Si no hay días hábiles publicados posteriores a ${lastHistDateStr}, devuelve: { "nuevos_dias": [] }`;
+            const prompt = `Busca en sbs.gob.pe (reporte FP-1359) los valores cuota de las 4 AFP peruanas (Habitat, Integra, Profuturo, Prima) Fondos 0,1,2,3 para dias habiles posteriores a ${lastHistDateStr} hasta ${todayStr}. Responde SOLO JSON sin markdown ni explicaciones:
+{"nuevos_dias":[{"fecha":"DD/MM/AAAA","datos":{"habitat":{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0},"integra":{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0},"profuturo":{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0},"prima":{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0}}}]}
+Si no hay datos nuevos: {"nuevos_dias":[]}`;
 
-            const sys = "Actúa como un extractor automático de datos financieros de la SBS en Perú. Tu única salida debe ser el objeto JSON exacto con todos los días hábiles faltantes, validando que los valores cuota tengan al menos 7 decimales.";
+            const sys = "";
 
             try {
                 const response = await runGeminiAnalysis(prompt, sys, true);
@@ -2008,6 +2021,8 @@
 
         // Inicialización General de la App al cargar el DOM
         document.addEventListener('DOMContentLoaded', () => {
+            // La API Key de Groq se configura exclusivamente a través del modal de configuración
+            // para mantener la seguridad. No se pre-carga ninguna clave en el código.
             loadSbsData();
             initHistoricalDatabase();
             renderApexChart('daily');
@@ -2023,7 +2038,7 @@
                 }, 1500);
             } else if (shouldAutoSync() && !getApiKey()) {
                 setTimeout(() => {
-                    showToast('Datos desactualizados', 'Configura tu API Key de Gemini para sincronizar datos SBS en vivo.', '🔑');
+                    showToast('Datos desactualizados', 'Configura tu API Key de Groq para sincronizar datos SBS en vivo.', '🔑');
                 }, 2000);
             }
 
@@ -2032,7 +2047,7 @@
             if (syncBtn && syncBtn.parentElement) {
                 const keyBtn = document.createElement('button');
                 keyBtn.id = 'btn-config-apikey';
-                keyBtn.title = 'Configurar API Key de Gemini';
+                keyBtn.title = 'Configurar API Key de Groq';
                 keyBtn.className = 'px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-[11px] font-bold transition active:scale-95';
                 keyBtn.innerHTML = '🔑';
                 keyBtn.onclick = () => showApiKeyModal();

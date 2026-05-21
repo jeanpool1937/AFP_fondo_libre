@@ -293,61 +293,150 @@ def get_last_excel_date():
         print(f"Error al leer la fecha de Excel: {str(e)}")
         return None
 
-def query_gemini_for_new_days(last_date_str):
-    """Consulta la API de Gemini con Grounding para obtener los días posteriores a la última fecha del Excel"""
-    api_key = os.getenv("GEMINI_API_KEY")
+def scrape_sbs_direct(last_date_str):
+    """Intenta obtener datos directamente del portal SBS sin usar IA"""
+    try:
+        import re
+        from bs4 import BeautifulSoup
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8',
+        })
+        # Visitar home primero para obtener cookies Incapsula
+        try:
+            session.get('https://www.sbs.gob.pe/', timeout=10)
+        except Exception:
+            pass
+
+        r = session.get('https://www.sbs.gob.pe/app/spp/variablesSPP_net/PagSS/variables_spp.aspx', timeout=20)
+        if not r.ok or len(r.content) < 5000:
+            print(f"  [SCRAPE] Portal SBS no accesible ({r.status_code}, {len(r.content)} bytes). Usando Groq...")
+            return None
+
+        soup = BeautifulSoup(r.content, 'html.parser')
+
+        # Parsear la fecha de la tabla de datos más reciente
+        date_pattern = re.compile(r'(\d{2}/\d{2}/\d{4})')
+        afp_map = {'HABITAT': 'habitat', 'INTEGRA': 'integra', 'PROFUTURO': 'profuturo', 'PRIMA': 'prima'}
+        dias_encontrados = {}
+
+        tables = soup.find_all('table')
+        for table in tables:
+            text = table.get_text()
+            dates_in_table = date_pattern.findall(text)
+            if not dates_in_table:
+                continue
+            fecha = dates_in_table[0]
+
+            # Verificar que esta fecha es posterior a la última en BD
+            from datetime import datetime
+            try:
+                fecha_dt = datetime.strptime(fecha, '%d/%m/%Y').date()
+                last_dt = datetime.strptime(last_date_str, '%d/%m/%Y').date()
+                if fecha_dt <= last_dt:
+                    continue
+            except Exception:
+                continue
+
+            # Extraer valores cuota (números con 7 decimales)
+            valores = re.findall(r'\b(\d{2,3}\.\d{7})\b', text)
+            rows = table.find_all('tr')
+            afp_data = {}
+
+            for row in rows:
+                cells = row.find_all('td')
+                if len(cells) < 5:
+                    continue
+                afp_name_raw = cells[0].get_text(strip=True).upper()
+                matched_afp = None
+                for key in afp_map:
+                    if key in afp_name_raw:
+                        matched_afp = afp_map[key]
+                        break
+                if not matched_afp:
+                    continue
+
+                cell_texts = [c.get_text(strip=True).replace(',', '') for c in cells]
+                numeric_vals = []
+                for ct in cell_texts:
+                    try:
+                        v = float(ct)
+                        if 10 < v < 500:
+                            numeric_vals.append(v)
+                    except Exception:
+                        pass
+
+                if len(numeric_vals) >= 4:
+                    # Orden típico en el portal SBS: F1, F2, F3, F0
+                    afp_data[matched_afp] = {
+                        'fondo0': round(numeric_vals[-1], 7),
+                        'fondo1': round(numeric_vals[0], 7),
+                        'fondo2': round(numeric_vals[1], 7),
+                        'fondo3': round(numeric_vals[2], 7),
+                    }
+
+            if len(afp_data) >= 2:
+                dias_encontrados[fecha] = afp_data
+
+        if dias_encontrados:
+            nuevos = [{'fecha': f, 'datos': d} for f, d in sorted(dias_encontrados.items())]
+            print(f"  [SCRAPE] Extraidos {len(nuevos)} dia(s) del portal SBS.")
+            return {'nuevos_dias': nuevos}
+
+        print("  [SCRAPE] Sin dias nuevos en el portal SBS.")
+        return {'nuevos_dias': []}
+
+    except Exception as e:
+        print(f"  [SCRAPE] Error en scraping directo: {e}. Usando Groq...")
+        return None
+
+
+def query_groq_for_new_days(last_date_str):
+    """Consulta la API de Groq (compound-beta con búsqueda web) para obtener los días posteriores a la última fecha del Excel"""
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         print("\n" + "="*80)
-        print("[AVISO] CONFIGURACION DE CLAVE DE API GEMINI:")
-        print("No se encontro la clave de API 'GEMINI_API_KEY' en el archivo local '.env' ni en el entorno.")
+        print("[AVISO] CONFIGURACION DE CLAVE DE API GROQ:")
+        print("No se encontro la clave de API 'GROQ_API_KEY' en el archivo local '.env' ni en el entorno.")
         print("Por favor, configure su clave en d:\\AFP\\.env de la siguiente forma:")
-        print("GEMINI_API_KEY=su_clave_aqui")
+        print("GROQ_API_KEY=su_clave_aqui")
         print("="*80 + "\n")
         return None
 
-    print(f"Conectando con Gemini AI (Google Grounding) para extraer nuevos días desde el {last_date_str}...")
-    
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
-    
-    prompt = f"""
-    Busca los valores cuota diarios oficiales publicados por la SBS de las AFP en el Perú del reporte estadístico 'FP-1359' para todas las AFP (Habitat, Integra, Profuturo, Prima) y todos los tipos de fondo (Fondo 0, 1, 2, 3) para todos los días hábiles estrictamente POSTERIORES a la fecha {last_date_str} y hasta el día de hoy.
-    Ten en cuenta que el día de hoy es {datetime.date.today().strftime('%d/%m/%Y')}.
-    
-    Entrega el resultado estrictamente en formato JSON utilizando el siguiente esquema, sin bloques de código ni markdown:
-    {{
-      "nuevos_dias": [
-        {{
-          "fecha": "DD/MM/AAAA",
-          "datos": {{
-            "habitat": {{ "fondo0": 16.0521549, "fondo1": 24.1405329, "fondo2": 28.2805992, "fondo3": 32.2617824 }},
-            "integra": {{ "fondo0": 15.4976685, "fondo1": 35.2221263, "fondo2": 302.1880558, "fondo3": 71.0599434 }},
-            "profuturo": {{ "fondo0": 15.6697676, "fondo1": 33.4906456, "fondo2": 273.0344308, "fondo3": 70.8470989 }},
-            "prima": {{ "fondo0": 15.6650603, "fondo1": 39.0464399, "fondo2": 56.7813321, "fondo3": 63.9355638 }}
-          }}
-        }}
-      ]
-    }}
-    
-    Si no existen días hábiles publicados por la SBS posteriores a {last_date_str} (por ejemplo, debido al desfase de actualización del portal de la SBS), devuelve:
-    {{
-      "nuevos_dias": []
-    }}
-    """
-    
+    today_str = datetime.date.today().strftime('%d/%m/%Y')
+    print(f"Conectando con Groq AI (compound-beta + web search) para extraer nuevos dias desde el {last_date_str}...")
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    prompt = (
+        f"Search sbs.gob.pe for the FP-1359 report. "
+        f"Get AFP Peru (Habitat, Integra, Profuturo, Prima) valor cuota for fondos 0,1,2,3 "
+        f"for business days strictly after {last_date_str} through {today_str}. "
+        f"Respond ONLY with valid JSON, no markdown: "
+        f'{{"nuevos_dias":[{{"fecha":"DD/MM/YYYY","datos":'
+        f'{{"habitat":{{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0}},'
+        f'"integra":{{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0}},'
+        f'"profuturo":{{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0}},'
+        f'"prima":{{"fondo0":0.0,"fondo1":0.0,"fondo2":0.0,"fondo3":0.0}}}}'
+        f'}}]}} or {{"nuevos_dias":[]}} if no new data found.'
+    )
+
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "tools": [{"google_search": {}}],
-        "systemInstruction": {
-            "parts": [{"text": "Actúa como un extractor e integrador automatizado de base de datos financieros en soles de la SBS del Perú. Entrega estrictamente la salida en formato JSON limpio."}]
-        }
+        "model": "compound-beta-mini",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 1200
     }
-    
+
     try:
-        response = requests.post(f"{url}?key={api_key}", json=payload, headers={"Content-Type": "application/json"}, timeout=35)
+        response = requests.post(url, json=payload,
+                                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                                 timeout=45)
         if response.ok:
             result = response.json()
-            text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-            
+            text = result["choices"][0]["message"]["content"].strip()
             # Limpiar posible código markdown
             if text.startswith("```json"):
                 text = text[7:]
@@ -356,13 +445,25 @@ def query_gemini_for_new_days(last_date_str):
             if text.endswith("```"):
                 text = text[:-3]
             text = text.strip()
-            
-            return json.loads(text)
+            if not text:
+                print("  [GROQ] Respuesta vacia.")
+                return None
+            parsed = json.loads(text)
+            # Validar que los datos no sean null/cero
+            if parsed.get("nuevos_dias"):
+                dias_validos = []
+                for dia in parsed["nuevos_dias"]:
+                    datos = dia.get("datos", {})
+                    hab = datos.get("habitat", {})
+                    if hab.get("fondo3", 0) and float(hab["fondo3"]) > 1:
+                        dias_validos.append(dia)
+                parsed["nuevos_dias"] = dias_validos
+            return parsed
         else:
-            print(f"Error al conectar con la API de Gemini: {response.status_code} {response.text}")
+            print(f"Error al conectar con la API de Groq: {response.status_code} {response.text[:300]}")
             return None
     except Exception as e:
-        print(f"Excepción al ejecutar la llamada a Gemini: {str(e)}")
+        print(f"Excepcion al ejecutar la llamada a Groq: {str(e)}")
         return None
 
 def update_excel_incremental():
@@ -386,8 +487,11 @@ def update_excel_incremental():
     # Exportar siempre a JS al inicio de la sincronización para asegurar sincronía
     export_to_js(df_existing)
     
-    # 3. Consultar los nuevos días a Gemini
-    extracted = query_gemini_for_new_days(last_date_str)
+    # 3. Intentar scraping directo del portal SBS; si falla, usar Groq
+    print(f"Intentando scraping directo del portal SBS...")
+    extracted = scrape_sbs_direct(last_date_str)
+    if extracted is None:
+        extracted = query_groq_for_new_days(last_date_str)
     
     if not extracted or "nuevos_dias" not in extracted or len(extracted["nuevos_dias"]) == 0:
         print(f"[OK] Sincronizacion Completa: El archivo de Excel ya esta actualizado al ultimo dia habil disponible publicado por la SBS ({last_date_str}). No se requiere agregar nuevos dias.")
