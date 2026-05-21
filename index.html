@@ -1847,6 +1847,24 @@
             }
         }
 
+        function getLastHistoricalDate() {
+            if (!window.sbsHistoricalData || window.sbsHistoricalData.length === 0) return null;
+            let latest = null;
+            window.sbsHistoricalData.forEach(d => {
+                const parts = d.Fecha.split('/');
+                const dt = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                if (!latest || dt > latest) latest = dt;
+            });
+            return latest;
+        }
+
+        function formatDateDDMMYYYY(date) {
+            const d = String(date.getDate()).padStart(2, '0');
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const y = date.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+
         async function syncSbsDataLive(silent = false) {
             if (!getApiKey()) {
                 if (!silent) showApiKeyModal(() => syncSbsDataLive());
@@ -1854,89 +1872,119 @@
             }
             const btn = document.getElementById('btn-sync-sbs');
             const origHTML = btn.innerHTML;
-            
+
             if (btn) {
                 btn.disabled = true;
                 btn.innerHTML = `<span class="w-3.5 h-3.5 rounded-full border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent animate-spin inline-block"></span> Sincronizando...`;
             }
-            
+
             if (!silent) showToast("Iniciando Extracción", "Consultando a la SBS vía IA con Grounding para obtener los valores cuota más recientes...", "🔍");
-            
-            const prompt = `Busca los valores cuota diarios oficiales de la SBS en Perú del reporte estadístico 'FP-1359' para todas las AFP (Habitat, Integra, Profuturo, Prima) y todos los fondos (Fondo 0, Fondo 1, Fondo 2, Fondo 3) para la fecha hábil de cierre más reciente de mayo de 2026.
+
+            // Detectar última fecha en el histórico para pedir solo los días faltantes
+            const lastHistDate = getLastHistoricalDate();
+            const lastHistDateStr = lastHistDate ? formatDateDDMMYYYY(lastHistDate) : '14/05/2026';
+            const todayStr = formatDateDDMMYYYY(new Date());
+
+            const prompt = `Busca los valores cuota diarios oficiales publicados por la SBS de las AFP en el Perú del reporte estadístico 'FP-1359' para todas las AFP (Habitat, Integra, Profuturo, Prima) y todos los tipos de fondo (Fondo 0, 1, 2, 3) para todos los días hábiles estrictamente POSTERIORES a la fecha ${lastHistDateStr} y hasta el día de hoy ${todayStr}.
             Devuelve ÚNICAMENTE un objeto JSON estructurado exactamente de la siguiente forma, sin bloques de código de marcado, sin triple backticks y sin explicaciones adicionales:
             {
-              "fecha": "DD/MM/AAAA",
-              "datos": {
-                "habitat": { "fondo0": 16.0521549, "fondo1": 24.1405329, "fondo2": 28.2805992, "fondo3": 32.2617824 },
-                "integra": { "fondo0": 15.4976685, "fondo1": 35.2221263, "fondo2": 302.1880558, "fondo3": 71.0599434 },
-                "profuturo": { "fondo0": 15.6697676, "fondo1": 33.4906456, "fondo2": 273.0344308, "fondo3": 70.8470989 },
-                "prima": { "fondo0": 15.6650603, "fondo1": 39.0464399, "fondo2": 56.7813321, "fondo3": 63.9355638 }
-              }
-            }`;
-            
-            const sys = "Actúa como un extractor automático de datos financieros de la SBS en Perú. Tu única salida debe ser el objeto JSON exacto, validando que los números decimales de los valores cuota tengan al menos 7 decimales.";
-            
+              "nuevos_dias": [
+                {
+                  "fecha": "DD/MM/AAAA",
+                  "datos": {
+                    "habitat": { "fondo0": 16.0521549, "fondo1": 24.1405329, "fondo2": 28.2805992, "fondo3": 32.2617824 },
+                    "integra": { "fondo0": 15.4976685, "fondo1": 35.2221263, "fondo2": 302.1880558, "fondo3": 71.0599434 },
+                    "profuturo": { "fondo0": 15.6697676, "fondo1": 33.4906456, "fondo2": 273.0344308, "fondo3": 70.8470989 },
+                    "prima": { "fondo0": 15.6650603, "fondo1": 39.0464399, "fondo2": 56.7813321, "fondo3": 63.9355638 }
+                  }
+                }
+              ]
+            }
+            Si no hay días hábiles publicados posteriores a ${lastHistDateStr}, devuelve: { "nuevos_dias": [] }`;
+
+            const sys = "Actúa como un extractor automático de datos financieros de la SBS en Perú. Tu única salida debe ser el objeto JSON exacto con todos los días hábiles faltantes, validando que los valores cuota tengan al menos 7 decimales.";
+
             try {
                 const response = await runGeminiAnalysis(prompt, sys, true);
-                
-                // Limpiar posibles marcas de código markdown si la IA las incluye por error
+
                 let cleanedText = response.text.trim();
-                if (cleanedText.startsWith("```json")) {
-                    cleanedText = cleanedText.substring(7);
-                } else if (cleanedText.startsWith("```")) {
-                    cleanedText = cleanedText.substring(3);
-                }
-                if (cleanedText.endsWith("```")) {
-                    cleanedText = cleanedText.substring(0, cleanedText.length - 3);
-                }
+                if (cleanedText.startsWith("```json")) cleanedText = cleanedText.substring(7);
+                else if (cleanedText.startsWith("```")) cleanedText = cleanedText.substring(3);
+                if (cleanedText.endsWith("```")) cleanedText = cleanedText.substring(0, cleanedText.length - 3);
                 cleanedText = cleanedText.trim();
-                
+
                 const parsed = JSON.parse(cleanedText);
-                
-                if (parsed.fecha && parsed.datos) {
-                    sbsDataDate = parsed.fecha;
-                    
-                    const afps = ['habitat', 'integra', 'profuturo', 'prima'];
-                    const fondos = ['fondo0', 'fondo1', 'fondo2', 'fondo3'];
-                    
-                    afps.forEach(afp => {
-                        if (parsed.datos[afp]) {
-                            fondos.forEach(fondo => {
-                                if (parsed.datos[afp][fondo] !== undefined) {
-                                    sbsData[afp][fondo].val = parseFloat(parsed.datos[afp][fondo]);
-                                }
-                            });
-                        }
-                    });
-                    
-                    // Guardar en localStorage
-                    localStorage.setItem('sbs_saved_data', JSON.stringify(sbsData));
-                    localStorage.setItem('sbs_saved_date', sbsDataDate);
-                    
-                    // Actualizar el DOM y la UI
-                    updateSbsTableDOM();
-                    handleAfpFundChange();
-                    
-                    // Efecto de brillo de éxito en la tabla
-                    const tableContainer = document.querySelector('tbody');
-                    if (tableContainer) {
-                        tableContainer.style.transition = "all 0.5s ease";
-                        tableContainer.style.boxShadow = "0 0 30px rgba(16, 185, 129, 0.25)";
-                        setTimeout(() => {
-                            tableContainer.style.boxShadow = "none";
-                        }, 1500);
-                    }
-                    
-                    showToast("Sincronización Exitosa", `Datos actualizados a la fecha oficial SBS: ${sbsDataDate}`, "✅");
-                } else {
-                    throw new Error("Formato de datos devueltos no es válido.");
+
+                if (!parsed.nuevos_dias || parsed.nuevos_dias.length === 0) {
+                    showToast("Sin datos nuevos", `La base de datos ya está al día (${lastHistDateStr}).`, "ℹ️");
+                    return;
                 }
+
+                const afpNameMap = {
+                    'habitat': 'AFP Habitat', 'integra': 'AFP Integra',
+                    'profuturo': 'AFP Profuturo', 'prima': 'Prima AFP'
+                };
+                const fondoKeyMap = {
+                    'fondo0': 'Fondo_0', 'fondo1': 'Fondo_1',
+                    'fondo2': 'Fondo_2', 'fondo3': 'Fondo_3'
+                };
+
+                // Añadir cada nuevo día al histórico en memoria
+                const afps = ['habitat', 'integra', 'profuturo', 'prima'];
+                const fondos = ['fondo0', 'fondo1', 'fondo2', 'fondo3'];
+                let addedCount = 0;
+
+                parsed.nuevos_dias.forEach(dia => {
+                    if (!dia.fecha || !dia.datos) return;
+                    afps.forEach(afp => {
+                        if (!dia.datos[afp]) return;
+                        const newEntry = { Fecha: dia.fecha, AFP: afpNameMap[afp] };
+                        fondos.forEach(fondo => {
+                            newEntry[fondoKeyMap[fondo]] = parseFloat(parseFloat(dia.datos[afp][fondo] || 0).toFixed(7));
+                        });
+                        window.sbsHistoricalData.push(newEntry);
+                        addedCount++;
+                    });
+                });
+
+                // Actualizar sbsData con el último día recibido
+                const ultimoDia = parsed.nuevos_dias[parsed.nuevos_dias.length - 1];
+                sbsDataDate = ultimoDia.fecha;
+                afps.forEach(afp => {
+                    if (ultimoDia.datos[afp]) {
+                        fondos.forEach(fondo => {
+                            if (ultimoDia.datos[afp][fondo] !== undefined) {
+                                sbsData[afp][fondo].val = parseFloat(ultimoDia.datos[afp][fondo]);
+                            }
+                        });
+                    }
+                });
+
+                // Persistir en localStorage
+                localStorage.setItem('sbs_saved_data', JSON.stringify(sbsData));
+                localStorage.setItem('sbs_saved_date', sbsDataDate);
+
+                // Actualizar tabla y gráfico
+                updateSbsTableDOM();
+                initHistoricalDatabase();
+                renderApexChart(currentPeriod);
+                handleAfpFundChange();
+
+                // Efecto de brillo en tabla
+                const tableContainer = document.querySelector('tbody');
+                if (tableContainer) {
+                    tableContainer.style.transition = "all 0.5s ease";
+                    tableContainer.style.boxShadow = "0 0 30px rgba(16, 185, 129, 0.25)";
+                    setTimeout(() => { tableContainer.style.boxShadow = "none"; }, 1500);
+                }
+
+                showToast("Sincronización Exitosa", `${parsed.nuevos_dias.length} día(s) integrado(s). Datos actualizados al ${sbsDataDate}`, "✅");
             } catch (error) {
                 console.error(error);
                 if (error.message === 'NO_API_KEY') {
                     showApiKeyModal(() => syncSbsDataLive());
                 } else {
-                    showToast("Error de Extracción", "No se pudo sincronizar. Verifica tu API Key en el botón 🔑 o reintenta.", "⚠️");
+                    showToast("Error de Extracción", "No se pudo sincronizar. Verifica tu API Key o reintenta.", "⚠️");
                 }
             } finally {
                 btn.disabled = false;

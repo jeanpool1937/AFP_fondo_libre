@@ -50,13 +50,24 @@ def export_to_js(df):
     """Exporta el DataFrame histórico a un archivo JavaScript para consumo directo del frontend"""
     js_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sbs_historical_data.js")
     try:
-        # Convertir el DataFrame a una lista de diccionarios
+        # Convertir el DataFrame a una lista de diccionarios, asegurando tipos serializables
         records = df.to_dict(orient="records")
+        cleaned = []
+        for rec in records:
+            clean_rec = {}
+            for k, v in rec.items():
+                if hasattr(v, 'strftime'):  # Timestamp / date
+                    clean_rec[k] = v.strftime("%d/%m/%Y")
+                elif hasattr(v, 'item'):    # numpy scalar
+                    clean_rec[k] = v.item()
+                else:
+                    clean_rec[k] = v
+            cleaned.append(clean_rec)
         # Escribir el archivo JS definiendo la variable global en el objeto window
         with open(js_path, "w", encoding="utf-8") as f:
             f.write("/* Base de datos de valores cuota diarios SBS (Generado automáticamente) */\n")
             f.write("window.sbsHistoricalData = ")
-            json.dump(records, f, ensure_ascii=False, indent=2)
+            json.dump(cleaned, f, ensure_ascii=False, indent=2)
             f.write(";\n")
         print(f"[OK] Base de datos JS exportada con éxito en '{js_path}' para el frontend.")
     except Exception as e:
