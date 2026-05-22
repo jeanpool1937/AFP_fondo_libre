@@ -1,0 +1,22 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "index.html",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "sbs_historical_data.js",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "api/*.js",
+            "use": "@vercel/node"
+        }
+    ],
+    "routes": [
+        { "src": "/api/config", "dest": "/api/config.js" },
+        { "src": "/sbs_historical_data.js", "dest": "/sbs_historical_data.js" },
+        { "src": "/(.*)", "dest": "/index.html" }
+    ]
+}

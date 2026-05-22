@@ -1340,7 +1340,7 @@
         }
 
         // Integración con la API de Groq
-        // Obtener API Key desde localStorage
+        // Obtener API Key: primero localStorage, luego endpoint serverless de Vercel
         function getApiKey() {
             return localStorage.getItem('groq_api_key') || '';
         }
@@ -1348,6 +1348,30 @@
         function saveApiKey(key) {
             localStorage.setItem('groq_api_key', key.trim());
         }
+
+        /**
+         * Intenta cargar la API Key desde el endpoint serverless /api/config (Vercel).
+         * Si se obtiene exitosamente, la guarda en localStorage para uso offline futuro.
+         * Se ejecuta automáticamente al iniciar la app.
+         */
+        async function loadApiKeyFromServer() {
+            // Si ya tenemos la key en localStorage, no hacer fetch innecesario
+            if (localStorage.getItem('groq_api_key')) return;
+
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) return; // No hay env var configurada en Vercel, ok
+                const data = await res.json();
+                if (data.groq_api_key) {
+                    saveApiKey(data.groq_api_key);
+                    console.log('[Config] API Key cargada automáticamente desde el servidor.');
+                }
+            } catch (e) {
+                // Modo local: no hay endpoint serverless, el usuario deberá configurar manualmente
+                console.log('[Config] Sin endpoint serverless disponible. Modo configuración manual.');
+            }
+        }
+
 
         function showApiKeyModal(onSuccess) {
             const existing = document.getElementById('apikey-modal');
@@ -2020,7 +2044,11 @@ Si no hay datos nuevos: {"nuevos_dias":[]}`;
         }
 
         // Inicialización General de la App al cargar el DOM
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Paso 1: Intentar cargar la API Key automáticamente desde el servidor (Vercel env vars)
+            // Esto permite que la app funcione sin configuración manual en el entorno de producción
+            await loadApiKeyFromServer();
+
             // La API Key de Groq se configura exclusivamente a través del modal de configuración
             // para mantener la seguridad. No se pre-carga ninguna clave en el código.
             loadSbsData();
